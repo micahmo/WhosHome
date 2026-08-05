@@ -28,6 +28,20 @@
   let installed = $state(false)
   let deferredPrompt = $state<BeforeInstallPromptEvent | null>(null)
   let linkCopied = $state(false)
+  let browserUrl = $state('')
+
+  /**
+   * Android honours intent:// from inside most web views, which is the only way to escape one
+   * programmatically. Deliberately no package= so it hands off to whichever browser is the
+   * default: pinning it to Chrome would simply fail for anyone who does not have Chrome.
+   * There is no equivalent on iOS, and no browser anywhere exposes an API to trigger
+   * installation directly.
+   */
+  function buildBrowserIntent(href: string): string {
+    const url = new URL(href)
+    const scheme = url.protocol.replace(':', '')
+    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`
+  }
 
   /**
    * In-app browsers cannot install a web app at all: no beforeinstallprompt, and no Add to Home
@@ -56,6 +70,7 @@
     installed =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    browserUrl = buildBrowserIntent(window.location.href)
 
     function capture(event: Event) {
       event.preventDefault()
@@ -107,17 +122,18 @@
   {:else}
     {#if isInAppBrowser}
       <aside class="notice">
-        <strong>Open this in your browser first</strong>
+        <strong>Open this page in your browser first</strong>
         <p>
-          You are in a messaging app's built-in browser, which cannot install apps.
           {#if isIos}
-            Tap the compass or Safari icon to reopen this page, or copy the link and paste it
-            into Safari.
+            Tap the Safari icon, or copy the link and paste it into Safari.
           {:else}
-            Tap the three dot menu and choose "Open in Chrome", or copy the link and paste it
-            into Chrome.
+            Tap below, or copy the link and paste it into your browser.
           {/if}
+          This browser cannot install apps.
         </p>
+        {#if !isIos}
+          <a class="escape" href={browserUrl}>Open in browser</a>
+        {/if}
         <button onclick={copyLink}>{linkCopied ? 'Link copied' : 'Copy this link'}</button>
       </aside>
     {/if}
@@ -128,10 +144,7 @@
     <ol>
       <li>
         <h2>Install Traccar Client</h2>
-        <p class="muted">
-          This is the app that tells Who's Home how far away you are. It is the only app you
-          need to install.
-        </p>
+        <p class="muted">The only app you need. It reports how far you are from home.</p>
         <a class="button" href={isIos ? appStore : playStore} target="_blank" rel="noreferrer">
           {isIos ? 'Get it on the App Store' : 'Get it on Google Play'}
         </a>
@@ -139,10 +152,7 @@
 
       <li>
         <h2>Point it at the right server</h2>
-        <p class="muted">
-          Come back here once it is installed and tap below. Traccar Client opens and asks to
-          apply the settings. Say yes.
-        </p>
+        <p class="muted">Come back here, tap below, and say yes when it asks to apply settings.</p>
         <a class="button" href={info.traccarUrl}>Configure Traccar Client</a>
         <details>
           <summary>Do it by hand instead</summary>
@@ -153,27 +163,20 @@
 
       <li>
         <h2>Start tracking</h2>
-        <p class="muted">
-          Configuring it does not switch it on. Tap below, or open Traccar Client and turn on
-          the switch labeled "Continuous tracking".
-        </p>
+        <p class="muted">Tap below, then allow location.</p>
         <a class="button" href={startTracking}>Start tracking</a>
         <p class="muted small">
-          It asks for location permission at this point, not earlier.
           {#if isIos}
-            Choose <strong>Allow While Using App</strong>, and accept if iOS later offers to
-            change it to <strong>Always Allow</strong>. Without that it stops reporting once you
-            leave the app, and do not swipe Traccar Client away, which stops it completely.
+            Choose <strong>Allow While Using App</strong>, and say yes if iOS later offers
+            <strong>Always Allow</strong>. Leave Traccar Client running rather than swiping it
+            away.
           {:else}
-            The first prompt only offers <strong>While using the app</strong>, which is not
-            enough on its own. Accept it, then open Settings, Apps, Traccar Client, Permissions,
-            Location and choose <strong>Allow all the time</strong>.
+            Choose <strong>Allow all the time</strong>. If you only see
+            <strong>While using the app</strong>, accept it, then open Settings, Apps, Traccar
+            Client, Permissions, Location and change it there.
           {/if}
         </p>
-        <p class="muted small">
-          Check that "Continuous tracking" is on before moving on. If it is off, nothing is
-          being sent.
-        </p>
+        <p class="muted small">Traccar Client should now show "Continuous tracking" switched on.</p>
       </li>
 
       <li>
@@ -189,11 +192,16 @@
             Tap the Share button at the bottom of Safari, scroll down, and choose
             <strong>Add to Home Screen</strong>. Then open Who's Home from the new icon.
           </p>
+        {:else if isInAppBrowser}
+          <p class="muted">Open this page in your browser, then install it from there.</p>
+          <a class="button" href={browserUrl}>Open in browser</a>
         {:else}
+          <!-- A real browser that does not offer an install prompt, Firefox being the common
+               case, so the menu is the only route and telling them to switch browsers would be
+               both wrong and rude. -->
           <p class="muted">
-            Open the browser menu, the three dots in the corner, and choose
-            <strong>Install app</strong> or <strong>Add to Home screen</strong>. Then open Who's
-            Home from the new icon.
+            Open your browser menu and choose <strong>Install</strong> or
+            <strong>Add to Home screen</strong>. Then open Who's Home from the new icon.
           </p>
         {/if}
 
@@ -259,7 +267,9 @@
     color: var(--muted);
   }
 
-  .notice button {
+  .notice button,
+  .notice .escape {
+    display: inline-block;
     border: 1px solid var(--line);
     background: none;
     color: inherit;
@@ -267,6 +277,8 @@
     padding: 0.5rem 0.9rem;
     font-family: inherit;
     font-size: 0.85rem;
+    text-decoration: none;
+    margin-right: 0.4rem;
   }
 
   .button {
