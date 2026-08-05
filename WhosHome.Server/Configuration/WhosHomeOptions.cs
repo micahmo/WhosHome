@@ -54,4 +54,26 @@ public class WhosHomeOptions
     /// <summary>Contact address included in the VAPID token. Push services want a way to reach
     /// whoever operates the server if it misbehaves.</summary>
     public string VapidSubject { get; set; } = "mailto:admin@localhost";
+
+    /// <summary>Base URL of a self-hosted OSRM instance, for example http://172.18.0.74:5000.
+    /// Leave unset to skip travel times entirely and show straight-line distance only.</summary>
+    public string? OsrmBaseUrl { get; set; }
+
+    /// <summary>How far OSRM may snap a coordinate to a road before the answer is treated as
+    /// meaningless. OSRM returns a confident route for points far outside its extract by snapping
+    /// them hundreds of kilometres, so this is the real check on whether a route is about the
+    /// place we asked about.</summary>
+    public double OsrmMaxSnapMeters { get; set; } = 250;
+
+    /// <summary>How long to wait on OSRM before giving up. Short, because this runs inline with
+    /// an incoming position report and travel time is only enrichment. A local OSRM answers in
+    /// tens of milliseconds, so this only ever elapses when something is actually wrong.</summary>
+    public TimeSpan OsrmTimeout { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long to stop asking OSRM after it fails. Must comfortably exceed the interval
+    /// between incoming reports, or the cooldown expires before the next one arrives and every
+    /// report pays the timeout anyway. Traccar Client reports roughly every 90 seconds per person,
+    /// so minutes rather than seconds. Recovery costs at most one cooldown of missing travel
+    /// times, which nobody notices.</summary>
+    public TimeSpan OsrmFailureCooldown { get; set; } = TimeSpan.FromMinutes(5);
 }

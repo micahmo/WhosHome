@@ -19,6 +19,7 @@ using WhosHome.Server.Ingest;
 using WhosHome.Server.Notifications;
 using WhosHome.Server.Presence;
 using WhosHome.Server.Retention;
+using WhosHome.Server.Routing;
 
 const string SignInPolicy = "sign-in";
 
@@ -70,6 +71,11 @@ using (ILoggerFactory startupLoggerFactory = LoggerFactory.Create(logging => log
 builder.Services.AddHttpClient<PushServiceClient>();
 builder.Services.AddScoped<PresenceNotifier>();
 
+// Timeout on the client itself, because this call sits inline with an incoming position report.
+// The circuit is a singleton so one failure spares every subsequent report the same dead wait.
+builder.Services.AddSingleton<OsrmCircuit>();
+builder.Services.AddHttpClient<OsrmClient>(client => client.Timeout = startupOptions.OsrmTimeout);
+
 // Session cookies are signed with Data Protection keys. Left at the default they live in the
 // container filesystem and vanish on every image update, silently signing the whole household
 // out. Keeping them next to the database puts them on the mounted volume.
@@ -118,6 +124,23 @@ app.UseStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Deliberately loud. Without a home location every distance is measured from a point in the Gulf
+// of Guinea, so everyone reads as impossibly far away and the app looks broken rather than
+// unconfigured. There is no sensible default, so the only options are to complain or to mislead.
+if (startupOptions.HomeLatitude == 0 && startupOptions.HomeLongitude == 0)
+{
+    app.Logger.LogWarning(
+        "No home location configured. Set WhosHome__HomeLatitude and WhosHome__HomeLongitude, "
+        + "or every person will read as thousands of miles from home.");
+}
+
+app.Logger.LogInformation(
+    "Home radius {Home:F0} m, nearby radius {Nearby:F0} m, stale after {Stale}, routing {Routing}.",
+    startupOptions.HomeRadiusMeters,
+    startupOptions.NearbyRadiusMeters,
+    startupOptions.StaleAfter,
+    string.IsNullOrWhiteSpace(startupOptions.OsrmBaseUrl) ? "disabled" : startupOptions.OsrmBaseUrl);
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

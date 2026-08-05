@@ -2,11 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using WhosHome.Server.Configuration;
 using WhosHome.Server.Data;
+using WhosHome.Server.Routing;
 
 namespace WhosHome.Server.Presence;
 
 public class PresenceService(
     WhosHomeContext context,
+    OsrmClient routing,
     IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider)
 {
@@ -40,12 +42,19 @@ public class PresenceService(
         person.LastLongitude = longitude;
         person.LastState = currentState;
 
+        // Only worth asking when they are actually somewhere else. "0 minutes away" for someone
+        // sitting at home is not information, and skipping it halves the routing traffic.
+        RouteEstimate? route = currentState == PresenceState.Home
+            ? null
+            : await routing.TryGetDriveHomeAsync(latitude, longitude, cancellationToken);
+
         PositionReport report = new()
         {
             PersonId = person.Id,
             ReportedUtc = reportedUtc,
             ReceivedUtc = timeProvider.GetUtcNow(),
             DistanceMeters = distanceMeters,
+            TravelSeconds = route?.Seconds,
             AccuracyMeters = accuracyMeters,
             BatteryPercent = batteryPercent,
         };
@@ -106,6 +115,7 @@ public class PresenceService(
             Name = person.Name,
             State = Classify(latest.DistanceMeters),
             DistanceMeters = latest.DistanceMeters,
+            TravelSeconds = latest.TravelSeconds,
             LastReportedUtc = latest.ReportedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,

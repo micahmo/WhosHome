@@ -10,6 +10,8 @@ export interface PresenceView {
   name: string
   state: PresenceState
   distanceMeters: number | null
+  /** Driving time home when routing gave a trustworthy answer. Null is normal. */
+  travelSeconds: number | null
   lastReportedUtc: string | null
   /** Seconds since the last report, or null if there has never been one. */
   ageSeconds: number | null

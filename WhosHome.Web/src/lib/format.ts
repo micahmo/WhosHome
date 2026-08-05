@@ -21,6 +21,26 @@ export function formatDistance(meters: number | null): string {
   return miles < 10 ? `${miles.toFixed(1)} mi` : `${Math.round(miles)} mi`
 }
 
+/** Driving time home. Rounded generously, because a routing estimate is not a promise. */
+export function formatTravel(seconds: number | null): string {
+  if (seconds === null) {
+    return ''
+  }
+
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 1) {
+    return 'under a minute away'
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min away`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainder = minutes % 60
+  return remainder === 0 ? `${hours} hr away` : `${hours} hr ${remainder} min away`
+}
+
 /** Coarse relative age. Precision past "a few minutes" is noise here. */
 export function formatAge(seconds: number | null): string {
   if (seconds === null) {

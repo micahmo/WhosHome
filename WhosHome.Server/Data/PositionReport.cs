@@ -22,6 +22,11 @@ public class PositionReport
 
     public double DistanceMeters { get; set; }
 
+    /// <summary>Driving time home according to OSRM, or null when routing is off, unreachable, or
+    /// the position falls outside the routing extract. Display only: it never affects state or
+    /// notifications, so losing it degrades to showing plain distance.</summary>
+    public double? TravelSeconds { get; set; }
+
     public double? AccuracyMeters { get; set; }
 
     public double? BatteryPercent { get; set; }

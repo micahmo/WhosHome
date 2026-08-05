@@ -16,6 +16,10 @@ public sealed record PresenceView
 
     public double? DistanceMeters { get; init; }
 
+    /// <summary>Driving time home, when routing produced a trustworthy answer. Null is normal and
+    /// simply means the card shows distance without it.</summary>
+    public double? TravelSeconds { get; init; }
+
     public DateTimeOffset? LastReportedUtc { get; init; }
 
     /// <summary>Seconds since the last report. A plain number rather than a TimeSpan, because
