@@ -259,6 +259,7 @@ app.MapGet("/api/people", async (
     HttpContext httpContext,
     WhosHomeContext context,
     IOptions<WhosHomeOptions> options,
+    TimeProvider timeProvider,
     CancellationToken cancellationToken) =>
 {
     if (!await AdminAccess.IsAdminAsync(httpContext, options.Value))
@@ -266,11 +267,33 @@ app.MapGet("/api/people", async (
         return Results.Unauthorized();
     }
 
-    return Results.Ok(await context.People
+    DateTimeOffset now = timeProvider.GetUtcNow();
+    string origin = PublicOrigin(httpContext.Request);
+
+    List<Person> people = await context.People
         .AsNoTracking()
         .OrderBy(person => person.Name)
-        .Select(person => new { person.Id, person.Name, person.DeviceId })
-        .ToListAsync(cancellationToken));
+        .ToListAsync(cancellationToken);
+
+    // The live setup link comes back with each person so the admin page can show it again after
+    // a refresh. Without this the only way to see a code again is to mint a new one, which
+    // silently invalidates the link that was already sent to someone.
+    return Results.Ok(people.Select(person =>
+    {
+        bool linkIsLive = person.SetupToken is not null
+            && person.SetupTokenExpiresUtc is not null
+            && person.SetupTokenExpiresUtc > now;
+
+        return new
+        {
+            person.Id,
+            person.Name,
+            person.DeviceId,
+            Code = linkIsLive ? person.LoginCode : null,
+            SetupUrl = linkIsLive ? $"{origin}/setup/{person.SetupToken}" : null,
+            ExpiresUtc = linkIsLive ? person.SetupTokenExpiresUtc : null,
+        };
+    }));
 });
 
 app.MapPost("/api/people", async (

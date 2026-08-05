@@ -9,7 +9,7 @@
     listPeople,
     removePerson,
   } from './api'
-  import type { PersonSummary, SetupLink } from './types'
+  import type { PersonSummary } from './types'
 
   let admin = $state(false)
   let starting = $state(true)
@@ -17,14 +17,13 @@
   let error = $state('')
   let busy = $state(false)
 
+  // The server is the only source of truth for live setup links. Keeping a copy in component
+  // state meant a refresh lost it, and the only way to see a code again was to mint a new one,
+  // which invalidated whatever had already been sent.
   let people = $state<PersonSummary[]>([])
   let newName = $state('')
 
-  /** Most recently created link, keyed by person, so several can be open at once. */
-  let links = $state<Record<number, SetupLink>>({})
-
-  /** Which button last copied, as "personId:what", so the feedback lands on the right one. */
-  let copied = $state<string | null>(null)
+  let copied = $state<number | null>(null)
 
   /** The setup page explains itself, so the message does not have to. */
   function inviteText(url: string): string {
@@ -62,7 +61,6 @@
     await adminSignOut()
     admin = false
     people = []
-    links = {}
   }
 
   async function add(event: SubmitEvent) {
@@ -77,9 +75,9 @@
     try {
       const person = await addPerson(name)
       newName = ''
-      people = await listPeople()
       // Adding someone is only ever a prelude to onboarding them, so skip a click.
-      links = { ...links, [person.id]: await createSetupLink(person.id) }
+      await createSetupLink(person.id)
+      people = await listPeople()
     } catch {
       error = 'Could not add that person.'
     } finally {
@@ -88,10 +86,19 @@
   }
 
   async function newLink(person: PersonSummary) {
+    // Replacing a live link invalidates the one already sent, so say so when there is one.
+    if (
+      person.setupUrl &&
+      !confirm(`Replace ${person.name}'s setup link? The link and code you already sent will stop working.`)
+    ) {
+      return
+    }
+
     busy = true
     error = ''
     try {
-      links = { ...links, [person.id]: await createSetupLink(person.id) }
+      await createSetupLink(person.id)
+      people = await listPeople()
     } catch {
       error = 'Could not create a setup link.'
     } finally {
@@ -109,8 +116,6 @@
     error = ''
     try {
       await removePerson(person.id)
-      const { [person.id]: _removedLink, ...rest } = links
-      links = rest
       people = await listPeople()
     } catch {
       error = `Could not remove ${person.name}.`
@@ -119,14 +124,14 @@
     }
   }
 
-  async function copy(person: PersonSummary, what: 'link' | 'invite', text: string) {
+  async function copy(person: PersonSummary, text: string) {
     try {
       await navigator.clipboard.writeText(text)
-      copied = `${person.id}:${what}`
+      copied = person.id
       setTimeout(() => (copied = null), 2000)
     } catch {
-      // Clipboard access needs a secure context; the link is on screen to copy by hand.
-      error = 'Could not copy. Select the link and copy it manually.'
+      // Clipboard access needs a focused, secure context; the message is on screen either way.
+      error = 'Could not copy. Select the message and copy it manually.'
     }
   }
 </script>
@@ -173,31 +178,29 @@
             <span class="name">{person.name}</span>
             <span class="actions">
               <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
-                {links[person.id] ? 'New link' : 'Setup link'}
+                {person.setupUrl ? 'New link' : 'Setup link'}
               </button>
               <button class="danger" onclick={() => remove(person)} disabled={busy}>Remove</button>
             </span>
           </div>
 
-          {#if links[person.id]}
-            {@const link = links[person.id]}
+          {#if person.setupUrl}
+            {@const invite = inviteText(person.setupUrl)}
             <div class="link-box">
               <p class="muted small">
-                Send just the link. The page shows their code (<strong>{link.code}</strong>) and
-                the steps. Good for 24 hours.
+                Send this to {person.name}. The page shows their code
+                {#if person.code}(<strong>{person.code}</strong>){/if} and the steps.
+                {#if person.code}
+                  Good for 24 hours.
+                {:else}
+                  The code has already been used, so make a new link if they need to sign in again.
+                {/if}
               </p>
 
-              <button
-                class="secondary wide"
-                onclick={() => copy(person, 'invite', inviteText(link.setupUrl))}
-              >
-                {copied === `${person.id}:invite` ? 'Copied' : 'Copy invite'}
-              </button>
-
               <div class="url">
-                <code>{link.setupUrl}</code>
-                <button class="secondary" onclick={() => copy(person, 'link', link.setupUrl)}>
-                  {copied === `${person.id}:link` ? 'Copied' : 'Copy'}
+                <code>{invite}</code>
+                <button class="secondary" onclick={() => copy(person, invite)}>
+                  {copied === person.id ? 'Copied' : 'Copy'}
                 </button>
               </div>
             </div>
@@ -280,13 +283,8 @@
     font-weight: 500;
   }
 
-  button.wide {
-    width: 100%;
-    margin-bottom: 0.5rem;
-  }
-
   /* Reserve room for the longer "done" label so swapping the text does not resize the button
-     and reflow the URL sitting next to it. */
+     and reflow the message sitting next to it. */
   .url button {
     min-width: 5.75rem;
   }

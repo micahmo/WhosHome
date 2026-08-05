@@ -27,6 +27,11 @@ export interface PersonSummary {
   id: number
   name: string
   deviceId: string
+  /** The live setup link, or nulls when there is none or it has expired. Returned with the
+   * person so the admin page survives a refresh without minting a replacement. */
+  code: string | null
+  setupUrl: string | null
+  expiresUtc: string | null
 }
 
 export interface SetupLink {
