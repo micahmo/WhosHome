@@ -22,8 +22,10 @@ public class WhosHomeContext(DbContextOptions<WhosHomeContext> options) : DbCont
         modelBuilder.Entity<Person>(entity =>
         {
             entity.HasIndex(person => person.DeviceId).IsUnique();
+            entity.HasIndex(person => person.SetupToken);
             entity.Property(person => person.Name).HasMaxLength(100);
             entity.Property(person => person.DeviceId).HasMaxLength(64);
+            entity.Property(person => person.SetupToken).HasMaxLength(64);
         });
 
         modelBuilder.Entity<PositionReport>(entity =>

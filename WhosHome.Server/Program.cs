@@ -1,18 +1,23 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using WhosHome.Server.Auth;
 using WhosHome.Server.Configuration;
 using WhosHome.Server.Data;
 using WhosHome.Server.Ingest;
 using WhosHome.Server.Presence;
 using WhosHome.Server.Retention;
+
+const string SignInPolicy = "sign-in";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -43,31 +48,31 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(databaseDirectory, "keys")))
     .SetApplicationName("WhosHome");
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(cookieOptions =>
+builder.Services.AddAuthentication(AuthSchemes.Member)
+    .AddCookie(AuthSchemes.Member, cookieOptions =>
     {
-        cookieOptions.Cookie.Name = "whoshome.session";
-        cookieOptions.Cookie.HttpOnly = true;
-        cookieOptions.Cookie.SameSite = SameSiteMode.Lax;
-        cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        cookieOptions.ExpireTimeSpan = TimeSpan.FromDays(365);
-        cookieOptions.SlidingExpiration = true;
-
-        // This is an API, not a server-rendered site, so unauthenticated calls get a status
-        // code rather than a redirect to a login page that does not exist.
-        cookieOptions.Events.OnRedirectToLogin = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        };
-        cookieOptions.Events.OnRedirectToAccessDenied = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return Task.CompletedTask;
-        };
+        ConfigureCookie(cookieOptions, "whoshome.session", startupOptions.MemberSessionLifetime);
+    })
+    .AddCookie(AuthSchemes.Admin, cookieOptions =>
+    {
+        ConfigureCookie(cookieOptions, "whoshome.admin", startupOptions.AdminSessionLifetime);
     });
 
 builder.Services.AddAuthorization();
+
+// Six digits is a million combinations, which only stays out of reach if attempts are capped.
+builder.Services.AddRateLimiter(rateLimiterOptions =>
+{
+    rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiterOptions.AddPolicy(SignInPolicy, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientKey(httpContext),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = startupOptions.SignInAttemptsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+            }));
+});
 
 WebApplication app = builder.Build();
 
@@ -81,6 +86,7 @@ using (IServiceScope startupScope = app.Services.CreateScope())
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -88,7 +94,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 // Traccar Client speaks the OsmAnd protocol: values arrive in the query string or a form
 // body, and only id, lat and lon are mandatory. The device id is the only credential, which
-// is why it is long and random and why this endpoint is not behind the session cookie.
+// is why it is long and random and why this endpoint is not behind a session.
 app.MapMethods("/ingest", ["GET", "POST"], async (
     HttpRequest request,
     WhosHomeContext context,
@@ -133,10 +139,13 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     return Results.Ok();
 });
 
+// ---- Member sessions ----
+
 app.MapPost("/api/session", async (
     HttpContext httpContext,
     SignInRequest body,
     WhosHomeContext context,
+    IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     CancellationToken cancellationToken) =>
 {
@@ -168,60 +177,111 @@ app.MapPost("/api/session", async (
             new Claim(ClaimTypes.NameIdentifier, person.Id.ToString()),
             new Claim(ClaimTypes.Name, person.Name),
         ],
-        CookieAuthenticationDefaults.AuthenticationScheme));
+        AuthSchemes.Member));
 
     await httpContext.SignInAsync(
-        CookieAuthenticationDefaults.AuthenticationScheme,
+        AuthSchemes.Member,
         principal,
         new AuthenticationProperties { IsPersistent = true });
 
     return Results.Ok(new { personId = person.Id, name = person.Name });
-});
+}).RequireRateLimiting(SignInPolicy);
 
 app.MapGet("/api/session", (ClaimsPrincipal user) => Results.Ok(new
 {
     personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
     name = user.FindFirstValue(ClaimTypes.Name),
-})).RequireAuthorization();
+})).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
 
 app.MapDelete("/api/session", async (HttpContext httpContext) =>
 {
-    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    await httpContext.SignOutAsync(AuthSchemes.Member);
     return Results.NoContent();
 });
+
+// ---- Admin mode ----
+
+// Admin is a role a browser enters, not a person. The machine used for provisioning never has
+// to exist on the board.
+app.MapPost("/api/admin/session", async (
+    HttpContext httpContext,
+    AdminSignInRequest body,
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    WhosHomeOptions current = options.Value;
+    if (string.IsNullOrWhiteSpace(current.AdminToken))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!AdminAccess.ConstantTimeEquals(body.Token?.Trim(), current.AdminToken))
+    {
+        return Results.Unauthorized();
+    }
+
+    ClaimsPrincipal principal = new(new ClaimsIdentity(
+        [new Claim(ClaimTypes.Name, "admin")],
+        AuthSchemes.Admin));
+
+    // The raw token is exchanged for a cookie and never stored in the browser.
+    await httpContext.SignInAsync(
+        AuthSchemes.Admin,
+        principal,
+        new AuthenticationProperties { IsPersistent = true });
+
+    return Results.Ok(new { admin = true });
+}).RequireRateLimiting(SignInPolicy);
+
+app.MapGet("/api/admin/session", async (HttpContext httpContext, IOptions<WhosHomeOptions> options) =>
+{
+    bool admin = await AdminAccess.IsAdminAsync(httpContext, options.Value);
+    return admin ? Results.Ok(new { admin = true }) : Results.Unauthorized();
+});
+
+app.MapDelete("/api/admin/session", async (HttpContext httpContext) =>
+{
+    await httpContext.SignOutAsync(AuthSchemes.Admin);
+    return Results.NoContent();
+});
+
+// ---- The board ----
 
 app.MapGet("/api/presence", async (PresenceService presence, CancellationToken cancellationToken) =>
 {
     IReadOnlyList<PresenceView> views = await presence.GetPresenceAsync(cancellationToken);
     return Results.Ok(views);
-}).RequireAuthorization();
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
 
-app.MapGet("/api/people", (
-    HttpRequest request,
+// ---- Household management, admin only ----
+
+app.MapGet("/api/people", async (
+    HttpContext httpContext,
     WhosHomeContext context,
-    IOptions<WhosHomeOptions> options) =>
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
 {
-    if (!IsAdmin(request, options.Value))
+    if (!await AdminAccess.IsAdminAsync(httpContext, options.Value))
     {
         return Results.Unauthorized();
     }
 
-    return Results.Ok(context.People
+    return Results.Ok(await context.People
         .AsNoTracking()
         .OrderBy(person => person.Name)
         .Select(person => new { person.Id, person.Name, person.DeviceId, person.Enabled })
-        .ToList());
+        .ToListAsync(cancellationToken));
 });
 
 app.MapPost("/api/people", async (
-    HttpRequest request,
+    HttpContext httpContext,
     CreatePersonRequest body,
     WhosHomeContext context,
     IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     CancellationToken cancellationToken) =>
 {
-    if (!IsAdmin(request, options.Value))
+    if (!await AdminAccess.IsAdminAsync(httpContext, options.Value))
     {
         return Results.Unauthorized();
     }
@@ -246,13 +306,14 @@ app.MapPost("/api/people", async (
 
 app.MapPost("/api/people/{id:int}/code", async (
     int id,
-    HttpRequest request,
+    HttpContext httpContext,
     WhosHomeContext context,
     IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     CancellationToken cancellationToken) =>
 {
-    if (!IsAdmin(request, options.Value))
+    WhosHomeOptions current = options.Value;
+    if (!await AdminAccess.IsAdminAsync(httpContext, current))
     {
         return Results.Unauthorized();
     }
@@ -263,18 +324,108 @@ app.MapPost("/api/people/{id:int}/code", async (
         return Results.NotFound();
     }
 
+    DateTimeOffset expiresUtc = timeProvider.GetUtcNow() + current.SignInCodeLifetime;
+
     person.LoginCode = GenerateLoginCode();
-    person.LoginCodeExpiresUtc = timeProvider.GetUtcNow() + LoginCodeLifetime;
+    person.LoginCodeExpiresUtc = expiresUtc;
+
+    // The setup page is the thing actually handed to a person, so it expires with the code
+    // it reveals rather than lingering as a permanent URL exposing a device id.
+    person.SetupToken = GenerateSetupToken();
+    person.SetupTokenExpiresUtc = expiresUtc;
+
     await context.SaveChangesAsync(cancellationToken);
 
-    return Results.Ok(new { code = person.LoginCode, expiresUtc = person.LoginCodeExpiresUtc });
+    return Results.Ok(new
+    {
+        code = person.LoginCode,
+        expiresUtc,
+        setupUrl = $"{PublicOrigin(httpContext.Request)}/setup/{person.SetupToken}",
+    });
 });
+
+// Unauthenticated by necessity: the whole point is that someone can open this before they
+// have a session. The token is long, single-purpose and expires with the code.
+app.MapGet("/api/setup/{token}", async (
+    string token,
+    HttpContext httpContext,
+    WhosHomeContext context,
+    TimeProvider timeProvider,
+    CancellationToken cancellationToken) =>
+{
+    DateTimeOffset now = timeProvider.GetUtcNow();
+
+    Person? person = await context.People
+        .AsNoTracking()
+        .FirstOrDefaultAsync(candidate => candidate.SetupToken == token, cancellationToken);
+
+    if (person is null || person.SetupTokenExpiresUtc is null || person.SetupTokenExpiresUtc < now)
+    {
+        return Results.NotFound(new { error = "This setup link has expired." });
+    }
+
+    string ingestUrl = $"{PublicOrigin(httpContext.Request)}/ingest";
+
+    return Results.Ok(new
+    {
+        name = person.Name,
+        code = person.LoginCode,
+        ingestUrl,
+        // Verified against the Traccar Client source: custom scheme, any host except "action",
+        // and the parameter names are url/id, not serverUrl/deviceId as the forums claim.
+        traccarUrl =
+            $"org.traccar.client://configure?url={Uri.EscapeDataString(ingestUrl)}"
+            + $"&id={person.DeviceId}&accuracy=medium&distance=75&interval=300&stop_detection=true",
+        expiresUtc = person.SetupTokenExpiresUtc,
+    });
+}).RequireRateLimiting(SignInPolicy);
+
+// An unmatched API route must 404 rather than fall through to the app shell below. Otherwise
+// a typo'd endpoint quietly returns HTML and surfaces as a JSON parse error somewhere else.
+app.Map("/api/{**rest}", () => Results.NotFound());
 
 // Any route that is not an API call or a real file is the web app: hand back index.html and
 // let the client take over. Mapped last so the endpoints above win.
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+static void ConfigureCookie(CookieAuthenticationOptions cookieOptions, string name, TimeSpan lifetime)
+{
+    cookieOptions.Cookie.Name = name;
+    cookieOptions.Cookie.HttpOnly = true;
+    cookieOptions.Cookie.SameSite = SameSiteMode.Lax;
+    cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    cookieOptions.ExpireTimeSpan = lifetime;
+    cookieOptions.SlidingExpiration = true;
+
+    // This is an API, not a server-rendered site, so unauthenticated calls get a status code
+    // rather than a redirect to a login page that does not exist.
+    cookieOptions.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    cookieOptions.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+}
+
+static string ClientKey(HttpContext context)
+{
+    // Behind the Cloudflare tunnel every request arrives from the cloudflared container, so
+    // partitioning on the socket address would put the whole household in one bucket. The
+    // app is only reachable through the tunnel, so this header is trustworthy here.
+    if (context.Request.Headers.TryGetValue("CF-Connecting-IP", out StringValues forwarded)
+        && !StringValues.IsNullOrEmpty(forwarded))
+    {
+        return forwarded.ToString();
+    }
+
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
 
 static string GenerateDeviceId()
 {
@@ -288,21 +439,22 @@ static string GenerateLoginCode()
     return RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
 }
 
-static bool IsAdmin(HttpRequest request, WhosHomeOptions options)
+static string GenerateSetupToken()
 {
-    if (string.IsNullOrWhiteSpace(options.AdminToken))
-    {
-        return false;
-    }
+    return Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+}
 
-    if (!request.Headers.TryGetValue("X-WhosHome-Admin-Token", out StringValues provided))
-    {
-        return false;
-    }
+static string PublicOrigin(HttpRequest request)
+{
+    // The tunnel terminates TLS and forwards plain HTTP, so request.Scheme says "http" even
+    // though the browser used HTTPS. Without this the setup links we hand out would be
+    // http:// and would not work.
+    string scheme = request.Headers.TryGetValue("X-Forwarded-Proto", out StringValues forwarded)
+        && !StringValues.IsNullOrEmpty(forwarded)
+            ? forwarded.ToString().Split(',')[0].Trim()
+            : request.Scheme;
 
-    return CryptographicOperations.FixedTimeEquals(
-        Encoding.UTF8.GetBytes(provided.ToString()),
-        Encoding.UTF8.GetBytes(options.AdminToken));
+    return $"{scheme}://{request.Host}";
 }
 
 static async Task<IReadOnlyDictionary<string, string?>> ReadValuesAsync(HttpRequest request)
@@ -326,13 +478,8 @@ static async Task<IReadOnlyDictionary<string, string?>> ReadValuesAsync(HttpRequ
     return values;
 }
 
-public partial class Program
-{
-    /// <summary>Long enough to walk across the room and read it off a screen, short enough that
-    /// a guessed six-digit code is not worth the attempt.</summary>
-    private static readonly TimeSpan LoginCodeLifetime = TimeSpan.FromMinutes(15);
-}
-
 public record CreatePersonRequest(string Name);
 
 public record SignInRequest(string? Code);
+
+public record AdminSignInRequest(string? Token);

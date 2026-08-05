@@ -31,5 +31,12 @@ public class Person
 
     public DateTimeOffset? LoginCodeExpiresUtc { get; set; }
 
+    /// <summary>Unguessable token for this person's setup page. The page is unauthenticated by
+    /// necessity, since the whole point is that they can open it before they have a session, so
+    /// the token is long and expires alongside the code it reveals.</summary>
+    public string? SetupToken { get; set; }
+
+    public DateTimeOffset? SetupTokenExpiresUtc { get; set; }
+
     public List<PositionReport> Reports { get; set; } = [];
 }

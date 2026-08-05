@@ -28,6 +28,23 @@ public class WhosHomeOptions
     public string DatabasePath { get; set; } = "/data/whoshome.db";
 
     /// <summary>Shared secret for the admin endpoints. Admin endpoints are disabled entirely
-    /// when this is unset, so a misconfigured deployment fails closed.</summary>
+    /// when this is unset, so a misconfigured deployment fails closed. This is also the
+    /// break-glass credential: it is the only way back in when no browser holds admin mode.</summary>
     public string? AdminToken { get; set; }
+
+    /// <summary>How long a sign-in code stays usable. Long enough to send someone a setup link
+    /// at lunch and have them act on it after dinner. Codes are single use regardless.</summary>
+    public TimeSpan SignInCodeLifetime { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>How long a member session lasts without use. Sliding, so anyone who opens the
+    /// app within the window is renewed silently and never signs in again.</summary>
+    public TimeSpan MemberSessionLifetime { get; set; } = TimeSpan.FromDays(365);
+
+    /// <summary>How long admin mode lasts in a browser without use. Shorter than a member
+    /// session because it is a privileged mode used occasionally.</summary>
+    public TimeSpan AdminSessionLifetime { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>Sign-in attempts allowed per client per minute. Six digits is a million
+    /// combinations, which is only out of reach if attempts are capped.</summary>
+    public int SignInAttemptsPerMinute { get; set; } = 10;
 }

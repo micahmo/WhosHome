@@ -1,4 +1,4 @@
-import type { PresenceView, Session } from './types'
+import type { PersonSummary, PresenceView, Session, SetupInfo, SetupLink } from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -36,16 +36,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+// ---- Member session ----
+
 /** Returns the signed-in person, or null when there is no valid session. */
 export async function getSession(): Promise<Session | null> {
-  try {
-    return await request<Session>('/api/session')
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      return null
-    }
-    throw error
-  }
+  return orNullOn401(() => request<Session>('/api/session'))
 }
 
 export function signIn(code: string): Promise<Session> {
@@ -59,6 +54,57 @@ export function signOut(): Promise<void> {
   return request<void>('/api/session', { method: 'DELETE' })
 }
 
+// ---- Admin mode ----
+
+export async function isAdmin(): Promise<boolean> {
+  return (await orNullOn401(() => request<{ admin: boolean }>('/api/admin/session'))) !== null
+}
+
+export function adminSignIn(token: string): Promise<void> {
+  return request<void>('/api/admin/session', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+}
+
+export function adminSignOut(): Promise<void> {
+  return request<void>('/api/admin/session', { method: 'DELETE' })
+}
+
+// ---- Household management ----
+
+export function listPeople(): Promise<PersonSummary[]> {
+  return request<PersonSummary[]>('/api/people')
+}
+
+export function addPerson(name: string): Promise<PersonSummary> {
+  return request<PersonSummary>('/api/people', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function createSetupLink(personId: number): Promise<SetupLink> {
+  return request<SetupLink>(`/api/people/${personId}/code`, { method: 'POST' })
+}
+
+// ---- The board, and the setup page ----
+
 export function getPresence(): Promise<PresenceView[]> {
   return request<PresenceView[]>('/api/presence')
+}
+
+export function getSetup(token: string): Promise<SetupInfo> {
+  return request<SetupInfo>(`/api/setup/${encodeURIComponent(token)}`)
+}
+
+async function orNullOn401<T>(call: () => Promise<T>): Promise<T | null> {
+  try {
+    return await call()
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return null
+    }
+    throw error
+  }
 }

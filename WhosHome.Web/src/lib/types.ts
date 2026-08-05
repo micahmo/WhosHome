@@ -22,3 +22,26 @@ export interface Session {
   personId: number
   name: string
 }
+
+export interface PersonSummary {
+  id: number
+  name: string
+  deviceId: string
+  enabled: boolean
+}
+
+export interface SetupLink {
+  code: string
+  expiresUtc: string
+  setupUrl: string
+}
+
+/** What the setup page shows someone. Fetched with an unguessable token, not a session. */
+export interface SetupInfo {
+  name: string
+  code: string | null
+  ingestUrl: string
+  /** Ready-made org.traccar.client:// link that configures the app in one tap. */
+  traccarUrl: string
+  expiresUtc: string
+}
