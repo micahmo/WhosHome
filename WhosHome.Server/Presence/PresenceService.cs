@@ -104,7 +104,7 @@ public class PresenceService(
             State = Classify(latest.DistanceMeters),
             DistanceMeters = latest.DistanceMeters,
             LastReportedUtc = latest.ReportedUtc,
-            Age = age,
+            AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,
             BatteryPercent = latest.BatteryPercent,
         };

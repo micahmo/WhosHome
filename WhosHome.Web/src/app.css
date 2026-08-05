@@ -1,0 +1,56 @@
+:root {
+  --bg: #ffffff;
+  --surface: #f5f5f7;
+  --text: #1a1a1c;
+  --muted: #6b6b73;
+  --line: #e3e3e8;
+  --accent: #1a1a1c;
+  --accent-text: #ffffff;
+  --home: #2e9e4f;
+  --nearby: #b87a10;
+  --away: #c2453c;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121214;
+    --surface: #1d1d20;
+    --text: #f2f2f4;
+    --muted: #90909a;
+    --line: #2c2c31;
+    --accent: #f2f2f4;
+    --accent-text: #121214;
+    --home: #48c46b;
+    --nearby: #e0a93b;
+    --away: #e0655b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  /* System font stack, which does more for the native feel than anything else here. */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Kills the rubber-band bounce, the most common tell that an installed app is a web page. */
+  overscroll-behavior: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  /* Stops long-press from popping the text selection callout on iOS. */
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+input {
+  font-family: inherit;
+}

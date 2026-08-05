@@ -18,8 +18,9 @@ public sealed record PresenceView
 
     public DateTimeOffset? LastReportedUtc { get; init; }
 
-    /// <summary>Age of the last report at the time this view was built.</summary>
-    public TimeSpan? Age { get; init; }
+    /// <summary>Seconds since the last report. A plain number rather than a TimeSpan, because
+    /// .NET's TimeSpan JSON format is a .NET-ism the browser should not have to parse.</summary>
+    public double? AgeSeconds { get; init; }
 
     /// <summary>True when the last report is older than the configured stale window. The state
     /// is still the last known one; this tells the UI to present it as history rather than as

@@ -25,5 +25,11 @@ public class Person
 
     public double? LastLongitude { get; set; }
 
+    /// <summary>Short-lived code this person types into the web app to start a session.
+    /// Cleared as soon as it is used.</summary>
+    public string? LoginCode { get; set; }
+
+    public DateTimeOffset? LoginCodeExpiresUtc { get; set; }
+
     public List<PositionReport> Reports { get; set; } = [];
 }

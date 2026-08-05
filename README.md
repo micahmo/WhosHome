@@ -22,30 +22,46 @@ update, so a report older than `StaleAfter` is flagged with `isStale` and its `a
 to present as history rather than as current fact. Only a person who has never reported at all
 reads as `Unknown`.
 
+## Layout
+
+`WhosHome.Server` is an ASP.NET Core app: the OsmAnd receiver, the read API, and session auth.
+`WhosHome.Web` is a Vite + Svelte + TypeScript app that compiles to static files. In production
+ASP.NET Core serves those files from `wwwroot` on the same origin as the API, so there is no
+CORS to configure and no Node at runtime.
+
 ## Running locally
 
+Two servers side by side. The .NET one:
+
 ```bash
-dotnet run --project WhosHome.Server
+dotnet run --project WhosHome.Server --urls http://localhost:5199
 ```
 
-The development profile writes to `./data/whoshome.db` and sets the admin token to `dev-token`.
-
-Add a person:
+And the frontend, which proxies `/api` and `/ingest` across to it:
 
 ```bash
-curl -X POST http://localhost:5000/api/people -H "Content-Type: application/json" -H "X-WhosHome-Admin-Token: dev-token" -d "{\"name\":\"Micah\"}"
+npm run dev --prefix WhosHome.Web
 ```
 
-That returns a generated `deviceId`, which is the ingest credential. Simulate a report:
+Open the Vite URL, not the .NET one. The development profile writes to `./.localdb/whoshome.db`
+and sets the admin token to `dev-token`.
+
+Add a person, which returns the generated `deviceId` used as the ingest credential:
 
 ```bash
-curl "http://localhost:5000/ingest?id=<deviceId>&lat=43.0731&lon=-89.4012"
+curl -X POST http://localhost:5199/api/people -H "Content-Type: application/json" -H "X-WhosHome-Admin-Token: dev-token" -d "{\"name\":\"Micah\"}"
 ```
 
-Then read the board:
+Simulate a report:
 
 ```bash
-curl http://localhost:5000/api/presence
+curl "http://localhost:5199/ingest?id=<deviceId>&lat=43.0731&lon=-89.4012"
+```
+
+Mint a sign-in code for that person and type it into the web app:
+
+```bash
+curl -X POST http://localhost:5199/api/people/1/code -H "X-WhosHome-Admin-Token: dev-token"
 ```
 
 ## Configuration
@@ -84,6 +100,24 @@ the server URL from the link's own origin and path.
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
 | `GET`/`POST` `/ingest` | device id | OsmAnd protocol receiver |
-| `GET` `/api/presence` | none yet | The board |
+| `GET` `/api/presence` | session | The board |
+| `POST` `/api/session` | sign-in code | Start a session |
+| `GET` `/api/session` | session | Who am I |
+| `DELETE` `/api/session` | none | Sign out |
 | `GET`/`POST` `/api/people` | admin token | Manage household members |
+| `POST` `/api/people/{id}/code` | admin token | Mint a 15 minute sign-in code |
 | `GET` `/health` | none | Liveness |
+
+Sessions are cookie based, single-use codes, and last a year with sliding expiry. The Data
+Protection keys that sign those cookies are written next to the database so a container update
+does not sign everyone out.
+
+## Known gaps
+
+Sign-in codes are six digits with no attempt throttling, so they are brute-forceable in
+principle. They expire in 15 minutes and are single use, which makes this acceptable for a
+household app but not for anything wider. Rate limiting is worth adding before this is exposed
+to the open internet.
+
+The schema is created with `EnsureCreated` rather than migrations. That needs to change before
+there is a database anyone cares about.
