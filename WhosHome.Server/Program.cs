@@ -24,16 +24,29 @@ const string SignInPolicy = "sign-in";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<WhosHomeOptions>(builder.Configuration.GetSection(WhosHomeOptions.SectionName));
+// Container templates hand over every field they know about, so an optional setting left blank
+// arrives as an empty string. Binding "" to a double throws and the app never starts, which means
+// clearing a field in the Unraid UI would break the deployment. Blank values are dropped entirely
+// rather than nulled, because a null still binds as default(double) and would silently overwrite
+// the intended default with zero.
+Dictionary<string, string?> providedSettings = builder.Configuration
+    .GetSection(WhosHomeOptions.SectionName)
+    .AsEnumerable(makePathsRelative: true)
+    .Where(setting => !string.IsNullOrEmpty(setting.Value))
+    .ToDictionary(setting => setting.Key, setting => setting.Value);
+
+IConfigurationRoot settings = new ConfigurationBuilder()
+    .AddInMemoryCollection(providedSettings)
+    .Build();
+
+builder.Services.Configure<WhosHomeOptions>(settings);
 builder.Services.AddSingleton(TimeProvider.System);
 
 // The web client reads states by name. Integers would make the UI depend on enum ordering.
 builder.Services.ConfigureHttpJsonOptions(jsonOptions =>
     jsonOptions.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-WhosHomeOptions startupOptions =
-    builder.Configuration.GetSection(WhosHomeOptions.SectionName).Get<WhosHomeOptions>()
-    ?? new WhosHomeOptions();
+WhosHomeOptions startupOptions = settings.Get<WhosHomeOptions>() ?? new WhosHomeOptions();
 
 string databasePath = Path.GetFullPath(startupOptions.DatabasePath);
 string databaseDirectory = Path.GetDirectoryName(databasePath) ?? ".";
