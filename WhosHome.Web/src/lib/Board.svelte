@@ -1,6 +1,14 @@
 <script lang="ts">
   import type { NotificationPreference, PresenceView } from './types'
-  import { formatAge, formatDistance, formatDwell, formatTravel, stateLabel } from './format'
+  import {
+    deservesTimestamp,
+    formatAge,
+    formatDistance,
+    formatDwell,
+    formatTimestamp,
+    formatTravel,
+    stateLabel,
+  } from './format'
 
   let {
     people,
@@ -23,6 +31,16 @@
     {@const preference = preferenceFor(person.personId)}
     {@const settled = person.stationarySeconds !== null && !person.isStale}
     {@const moving = person.isMoving && !person.isStale}
+    {@const dwell =
+      formatDwell(person.stationarySeconds) +
+      (deservesTimestamp(person.stationarySeconds)
+        ? ` (since ${formatTimestamp(person.stationarySinceUtc)})`
+        : '')}
+    {@const age =
+      formatAge(person.ageSeconds) +
+      (deservesTimestamp(person.ageSeconds)
+        ? ` (at ${formatTimestamp(person.lastReceivedUtc)})`
+        : '')}
     <li class="card" class:stale={person.isStale}>
       <div class="head">
         <span class="who">
@@ -68,7 +86,7 @@
         <!-- Only at home do "been home this long" and "been in one spot this long" mean the same
              thing, so only here can the duration hang off the state without misleading. -->
         {#if settled && person.state === 'Home'}
-          <span class="distance">for {formatDwell(person.stationarySeconds)}</span>
+          <span class="distance">for {dwell}</span>
         {/if}
       </p>
 
@@ -77,7 +95,7 @@
           {#if moving}
             <span class="moving">On the move</span>
           {:else if settled && person.state !== 'Home'}
-            <span class="muted">Stopped for {formatDwell(person.stationarySeconds)}</span>
+            <span class="muted">Stopped for {dwell}</span>
           {/if}
           {#if person.travelSeconds !== null}
             {#if moving || (settled && person.state !== 'Home')}<span class="sep">&middot;</span>{/if}
@@ -87,7 +105,7 @@
       {/if}
 
       <p class="meta">
-        {formatAge(person.ageSeconds)}
+        {age}
         {#if person.batteryPercent !== null}
           <span class="sep">&middot;</span>{Math.round(person.batteryPercent)}% battery
         {/if}

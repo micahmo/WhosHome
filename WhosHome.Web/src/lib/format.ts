@@ -70,6 +70,49 @@ export function formatDwell(seconds: number | null): string {
   return days === 1 ? 'a day' : `${days} days`
 }
 
+/**
+ * Below this, a duration is easier to read than a clock time and the timestamp is just noise.
+ * Above it, "for 14 hours" stops telling you whether that began last evening or overnight.
+ */
+const timestampThresholdSeconds = 60 * 60
+
+export function deservesTimestamp(seconds: number | null): boolean {
+  return seconds !== null && seconds >= timestampThresholdSeconds
+}
+
+/**
+ * A clock time, with the date attached whenever it is not today. The date is the whole point for
+ * anyone who has been somewhere overnight: without it, "8:30 PM" is ambiguous by a day.
+ */
+export function formatTimestamp(isoUtc: string | null): string {
+  if (!isoUtc) {
+    return ''
+  }
+
+  const then = new Date(isoUtc)
+  if (Number.isNaN(then.getTime())) {
+    return ''
+  }
+
+  const time = then.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  if (then >= startOfToday) {
+    return time
+  }
+
+  const startOfYesterday = new Date(startOfToday)
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1)
+  if (then >= startOfYesterday) {
+    return `${time} yesterday`
+  }
+
+  // Beyond yesterday a weekday alone becomes ambiguous, so use the date.
+  const date = then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return `${time} on ${date}`
+}
+
 /** Coarse relative age. Precision past "a few minutes" is noise here. */
 export function formatAge(seconds: number | null): string {
   if (seconds === null) {

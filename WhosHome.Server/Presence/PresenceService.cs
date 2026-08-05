@@ -139,7 +139,9 @@ public class PresenceService(
             StationarySeconds = isMoving || person.StationarySinceUtc is null
                 ? null
                 : (now - person.StationarySinceUtc.Value).TotalSeconds,
+            StationarySinceUtc = isMoving ? null : person.StationarySinceUtc,
             LastReportedUtc = latest.ReportedUtc,
+            LastReceivedUtc = latest.ReceivedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,
             BatteryPercent = latest.BatteryPercent,

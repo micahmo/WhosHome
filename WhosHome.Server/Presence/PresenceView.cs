@@ -29,6 +29,14 @@ public sealed record PresenceView
 
     public DateTimeOffset? LastReportedUtc { get; init; }
 
+    /// <summary>When the server received the last report. Sent so the client can show an absolute
+    /// time that agrees with the age, rather than subtracting a duration from its own clock and
+    /// drifting whenever the phone and the server disagree.</summary>
+    public DateTimeOffset? LastReceivedUtc { get; init; }
+
+    /// <summary>When the current stop began, for the same reason.</summary>
+    public DateTimeOffset? StationarySinceUtc { get; init; }
+
     /// <summary>Seconds since the last report. A plain number rather than a TimeSpan, because
     /// .NET's TimeSpan JSON format is a .NET-ism the browser should not have to parse.</summary>
     public double? AgeSeconds { get; init; }

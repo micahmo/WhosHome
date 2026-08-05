@@ -16,7 +16,11 @@ export interface PresenceView {
   isMoving: boolean
   /** How long they have been in one spot. Null while moving. */
   stationarySeconds: number | null
+  /** When the current stop began. Sent absolute so clock skew cannot shift it. */
+  stationarySinceUtc: string | null
   lastReportedUtc: string | null
+  /** When the server received the last report; pairs with ageSeconds. */
+  lastReceivedUtc: string | null
   /** Seconds since the last report, or null if there has never been one. */
   ageSeconds: number | null
   /** The state is still the last known one; this says to present it as history. */
