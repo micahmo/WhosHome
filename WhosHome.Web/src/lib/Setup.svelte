@@ -144,9 +144,8 @@
 
   code {
     display: block;
-    overflow-x: auto;
-    white-space: nowrap;
     font-size: 0.8rem;
+    word-break: break-all;
     padding: 0.5rem;
     border-radius: 0.4rem;
     background: var(--surface);

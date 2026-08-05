@@ -58,7 +58,6 @@ public class PresenceService(
 
         List<Person> people = await context.People
             .AsNoTracking()
-            .Where(person => person.Enabled)
             .OrderBy(person => person.Name)
             .ToListAsync(cancellationToken);
 

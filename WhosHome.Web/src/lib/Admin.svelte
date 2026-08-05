@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { addPerson, adminSignIn, adminSignOut, createSetupLink, isAdmin, listPeople } from './api'
+  import {
+    addPerson,
+    adminSignIn,
+    adminSignOut,
+    createSetupLink,
+    isAdmin,
+    listPeople,
+    removePerson,
+  } from './api'
   import type { PersonSummary, SetupLink } from './types'
 
   let admin = $state(false)
@@ -84,6 +92,26 @@
     }
   }
 
+  async function remove(person: PersonSummary) {
+    // Deleting takes their reports with it and cannot be undone, so ask first.
+    if (!confirm(`Remove ${person.name}? Their device will stop reporting and their history is deleted.`)) {
+      return
+    }
+
+    busy = true
+    error = ''
+    try {
+      await removePerson(person.id)
+      const { [person.id]: _discarded, ...rest } = links
+      links = rest
+      people = await listPeople()
+    } catch {
+      error = `Could not remove ${person.name}.`
+    } finally {
+      busy = false
+    }
+  }
+
   async function copy(person: PersonSummary, url: string) {
     try {
       await navigator.clipboard.writeText(url)
@@ -136,9 +164,12 @@
         <li>
           <div class="row">
             <span class="name">{person.name}</span>
-            <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
-              {links[person.id] ? 'New link' : 'Setup link'}
-            </button>
+            <span class="actions">
+              <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
+                {links[person.id] ? 'New link' : 'Setup link'}
+              </button>
+              <button class="danger" onclick={() => remove(person)} disabled={busy}>Remove</button>
+            </span>
           </div>
 
           {#if links[person.id]}
@@ -192,7 +223,7 @@
     gap: 0.75rem;
   }
 
-  /* Centred in the column to match the sign-in screen, which is the other thing you can
+  /* Centered in the column to match the sign-in screen, which is the other thing you can
      land on without a session. */
   form.gate {
     max-width: 22rem;
@@ -234,11 +265,24 @@
     font-weight: 500;
   }
 
+  button.danger {
+    background: none;
+    color: var(--away);
+    border: 1px solid var(--line);
+    font-weight: 500;
+  }
+
   button.link {
     background: none;
     color: var(--muted);
     font-size: 0.85rem;
     padding: 0;
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
   }
 
   ul {
@@ -277,12 +321,14 @@
     margin-top: 0.4rem;
   }
 
+  /* Wrapped rather than scrolled. A horizontal scrollbar sits on top of the text on Windows
+     and hides the URL completely on hover, and this still has to be selectable by hand when
+     the clipboard API is unavailable. */
   code {
     flex: 1;
     min-width: 0;
-    overflow-x: auto;
-    white-space: nowrap;
     font-size: 0.75rem;
+    word-break: break-all;
   }
 
   .muted {

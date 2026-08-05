@@ -14,8 +14,6 @@ public class Person
 
     public DateTimeOffset CreatedUtc { get; set; }
 
-    public bool Enabled { get; set; } = true;
-
     /// <summary>
     /// The most recent raw fix, overwritten on every report. This is the only place raw
     /// coordinates exist, so the database cannot accumulate a location history no matter how

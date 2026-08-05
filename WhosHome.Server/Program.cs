@@ -113,7 +113,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     Person? person = await context.People
         .FirstOrDefaultAsync(candidate => candidate.DeviceId == report!.DeviceId, cancellationToken);
 
-    if (person is null || !person.Enabled)
+    if (person is null)
     {
         // 400 rather than 404 so a buffering client discards the report instead of
         // retrying an id that will never be valid.
@@ -159,7 +159,7 @@ app.MapPost("/api/session", async (
 
     Person? person = await context.People
         .FirstOrDefaultAsync(
-            candidate => candidate.Enabled && candidate.LoginCode == code,
+            candidate => candidate.LoginCode == code,
             cancellationToken);
 
     if (person is null || person.LoginCodeExpiresUtc is null || person.LoginCodeExpiresUtc < now)
@@ -269,7 +269,7 @@ app.MapGet("/api/people", async (
     return Results.Ok(await context.People
         .AsNoTracking()
         .OrderBy(person => person.Name)
-        .Select(person => new { person.Id, person.Name, person.DeviceId, person.Enabled })
+        .Select(person => new { person.Id, person.Name, person.DeviceId })
         .ToListAsync(cancellationToken));
 });
 
@@ -302,6 +302,32 @@ app.MapPost("/api/people", async (
     await context.SaveChangesAsync(cancellationToken);
 
     return Results.Created($"/api/people/{person.Id}", new { person.Id, person.Name, person.DeviceId });
+});
+
+app.MapDelete("/api/people/{id:int}", async (
+    int id,
+    HttpContext httpContext,
+    WhosHomeContext context,
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    if (!await AdminAccess.IsAdminAsync(httpContext, options.Value))
+    {
+        return Results.Unauthorized();
+    }
+
+    Person? person = await context.People.FindAsync([id], cancellationToken);
+    if (person is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Reports cascade. Removing someone should leave nothing of them behind, which is the
+    // same promise the retention rules make.
+    context.People.Remove(person);
+    await context.SaveChangesAsync(cancellationToken);
+
+    return Results.NoContent();
 });
 
 app.MapPost("/api/people/{id:int}/code", async (

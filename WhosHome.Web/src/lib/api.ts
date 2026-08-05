@@ -88,6 +88,10 @@ export function createSetupLink(personId: number): Promise<SetupLink> {
   return request<SetupLink>(`/api/people/${personId}/code`, { method: 'POST' })
 }
 
+export function removePerson(personId: number): Promise<void> {
+  return request<void>(`/api/people/${personId}`, { method: 'DELETE' })
+}
+
 // ---- The board, and the setup page ----
 
 export function getPresence(): Promise<PresenceView[]> {

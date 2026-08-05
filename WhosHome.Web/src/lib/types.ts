@@ -27,7 +27,6 @@ export interface PersonSummary {
   id: number
   name: string
   deviceId: string
-  enabled: boolean
 }
 
 export interface SetupLink {
