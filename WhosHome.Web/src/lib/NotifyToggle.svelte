@@ -126,7 +126,7 @@
       <span class="muted">Notifications are blocked in your browser settings.</span>
     {:else}
       <button onclick={enabled ? disable : enable} disabled={busy}>
-        {enabled ? 'Turn off notifications' : 'Notify me when someone gets home'}
+        {enabled ? 'Turn off notifications' : 'Notify me when people come and go'}
       </button>
     {/if}
 

@@ -68,7 +68,7 @@ using (ILoggerFactory startupLoggerFactory = LoggerFactory.Create(logging => log
 }
 
 builder.Services.AddHttpClient<PushServiceClient>();
-builder.Services.AddScoped<ArrivalNotifier>();
+builder.Services.AddScoped<PresenceNotifier>();
 
 // Session cookies are signed with Data Protection keys. Left at the default they live in the
 // container filesystem and vanish on every image update, silently signing the whole household
@@ -128,7 +128,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     HttpRequest request,
     WhosHomeContext context,
     PresenceService presence,
-    ArrivalNotifier notifier,
+    PresenceNotifier notifier,
     TimeProvider timeProvider,
     ILogger<Program> logger,
     CancellationToken cancellationToken) =>
@@ -168,7 +168,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         recorded.CurrentState,
         report.Timestamp);
 
-    await notifier.NotifyIfApproachingAsync(
+    await notifier.NotifyAsync(
         person,
         recorded.PreviousState,
         recorded.CurrentState,

@@ -10,19 +10,21 @@ using WhosHome.Server.Presence;
 namespace WhosHome.Server.Notifications;
 
 /// <summary>
-/// Sends a notification when someone gets closer to home, crossing into the nearby ring or
-/// arriving. Departures are deliberately silent: nobody needs a push saying a housemate left.
+/// Announces someone getting close, arriving, and leaving. If you are notified about a person at
+/// all, you hear about all three.
 /// </summary>
-public class ArrivalNotifier(
+public class PresenceNotifier(
     WhosHomeContext context,
     PushServiceClient pushClient,
     VapidKeys vapidKeys,
     IOptions<WhosHomeOptions> options,
-    ILogger<ArrivalNotifier> logger)
+    ILogger<PresenceNotifier> logger)
 {
     private readonly WhosHomeOptions _options = options.Value;
 
-    public async Task NotifyIfApproachingAsync(
+    private sealed record Announcement(string Title, string Body);
+
+    public async Task NotifyAsync(
         Person person,
         PresenceState previousState,
         PresenceState currentState,
@@ -30,7 +32,8 @@ public class ArrivalNotifier(
     {
         ArgumentNullException.ThrowIfNull(person);
 
-        if (!IsApproaching(previousState, currentState))
+        Announcement? announcement = Describe(person.Name, previousState, currentState);
+        if (announcement is null)
         {
             return;
         }
@@ -57,18 +60,19 @@ public class ArrivalNotifier(
             return;
         }
 
-        string title = currentState == PresenceState.Home
-            ? $"{person.Name} is home"
-            : $"{person.Name} is nearby";
-
         string payload = JsonSerializer.Serialize(new
         {
-            title,
-            body = currentState == PresenceState.Home ? "Just arrived." : "Getting close to home.",
+            title = announcement.Title,
+            body = announcement.Body,
             tag = $"person-{person.Id}",
         });
 
         PushMessage message = new(payload) { Topic = $"person-{person.Id}" };
+
+        logger.LogInformation(
+            "Announcing \"{Title}\" to {Count} device(s).",
+            announcement.Title,
+            recipients.Count);
 
         foreach (DeviceSubscription recipient in recipients)
         {
@@ -77,19 +81,34 @@ public class ArrivalNotifier(
     }
 
     /// <summary>
-    /// Relies on <see cref="PresenceState"/> being ordered closest to furthest, so getting nearer
-    /// is a numeric decrease. Unknown is zero, which conveniently means a first-ever report never
-    /// counts as an arrival.
+    /// Returns null only for a first-ever report, where there is no previous state to compare to.
+    /// Every other change is announced, mirroring arrival and departure: getting close then
+    /// arriving on the way in, leaving then gone on the way out. The check order matters, because
+    /// leaving home should read as "left" rather than falling through to the outer ring.
     /// </summary>
-    private static bool IsApproaching(PresenceState previous, PresenceState current)
+    private static Announcement? Describe(string name, PresenceState previous, PresenceState current)
     {
-        if (previous == PresenceState.Unknown)
+        if (previous == PresenceState.Unknown || current == previous)
         {
-            return false;
+            return null;
         }
 
-        return current < previous
-            && current is PresenceState.Home or PresenceState.Nearby;
+        if (current == PresenceState.Home)
+        {
+            return new Announcement($"{name} is home", "Just arrived.");
+        }
+
+        if (previous == PresenceState.Home)
+        {
+            return new Announcement($"{name} left", "Just left home.");
+        }
+
+        if (current == PresenceState.Nearby)
+        {
+            return new Announcement($"{name} is nearby", "Getting close to home.");
+        }
+
+        return new Announcement($"{name} is away", "Left the area.");
     }
 
     private async Task SendAsync(
