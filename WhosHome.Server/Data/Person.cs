@@ -40,6 +40,11 @@ public class Person
     /// rather than re-notified on every report while someone sits at home.</summary>
     public Presence.PresenceState LastState { get; set; } = Presence.PresenceState.Unknown;
 
+    /// <summary>When this person last settled in one spot. Reset whenever they move further than
+    /// the movement threshold, so "here for two hours" measures the current stop rather than the
+    /// time since they were last seen.</summary>
+    public DateTimeOffset? StationarySinceUtc { get; set; }
+
     public List<PositionReport> Reports { get; set; } = [];
 
     public List<DeviceSubscription> Subscriptions { get; set; } = [];

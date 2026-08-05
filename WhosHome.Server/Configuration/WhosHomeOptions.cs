@@ -23,6 +23,11 @@ public class WhosHomeOptions
     /// and can be silently disabled by an app update, so age has to be visible.</summary>
     public TimeSpan StaleAfter { get; set; } = TimeSpan.FromMinutes(45);
 
+    /// <summary>How far a fix must be from the previous one to count as movement rather than GPS
+    /// noise. Reports arrive with around 100 m accuracy and Traccar Client's own distance filter
+    /// is 75 m, so a stationary phone can appear to wander over 100 m. This sits above that.</summary>
+    public double MovementThresholdMeters { get; set; } = 200;
+
     /// <summary>How long derived reports are kept before deletion.</summary>
     public TimeSpan ReportRetention { get; set; } = TimeSpan.FromDays(30);
 

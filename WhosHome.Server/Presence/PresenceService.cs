@@ -37,6 +37,20 @@ public class PresenceService(
 
         PresenceState previousState = person.LastState;
         PresenceState currentState = Classify(distanceMeters);
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // Movement is measured against the previous fix rather than against home, so someone
+        // driving in a circle still reads as moving.
+        double? movedMeters = person.LastLatitude is null || person.LastLongitude is null
+            ? null
+            : GeoMath.DistanceMeters(latitude, longitude, person.LastLatitude.Value, person.LastLongitude.Value);
+
+        bool isMoving = movedMeters > _options.MovementThresholdMeters;
+        if (isMoving || person.StationarySinceUtc is null)
+        {
+            // Moving restarts the clock; a first report starts it.
+            person.StationarySinceUtc = now;
+        }
 
         person.LastLatitude = latitude;
         person.LastLongitude = longitude;
@@ -52,9 +66,10 @@ public class PresenceService(
         {
             PersonId = person.Id,
             ReportedUtc = reportedUtc,
-            ReceivedUtc = timeProvider.GetUtcNow(),
+            ReceivedUtc = now,
             DistanceMeters = distanceMeters,
             TravelSeconds = route?.Seconds,
+            MovedMeters = movedMeters,
             AccuracyMeters = accuracyMeters,
             BatteryPercent = batteryPercent,
         };
@@ -101,11 +116,13 @@ public class PresenceService(
                 PersonId = person.Id,
                 Name = person.Name,
                 State = PresenceState.Unknown,
+                IsMoving = false,
                 IsStale = true,
             };
         }
 
         TimeSpan age = now - latest.ReceivedUtc;
+        bool isMoving = latest.MovedMeters > _options.MovementThresholdMeters;
 
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside and greys out stale entries.
@@ -116,6 +133,12 @@ public class PresenceService(
             State = Classify(latest.DistanceMeters),
             DistanceMeters = latest.DistanceMeters,
             TravelSeconds = latest.TravelSeconds,
+            IsMoving = isMoving,
+            // Suppressed while moving, and while stale, where it would otherwise claim someone has
+            // been standing still for hours when really we just stopped hearing from them.
+            StationarySeconds = isMoving || person.StationarySinceUtc is null
+                ? null
+                : (now - person.StationarySinceUtc.Value).TotalSeconds,
             LastReportedUtc = latest.ReportedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,

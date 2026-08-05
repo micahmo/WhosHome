@@ -20,6 +20,13 @@ public sealed record PresenceView
     /// simply means the card shows distance without it.</summary>
     public double? TravelSeconds { get; init; }
 
+    /// <summary>True when the latest fix showed real movement rather than GPS drift.</summary>
+    public required bool IsMoving { get; init; }
+
+    /// <summary>How long they have been in one spot. Null while moving, because "here for two
+    /// minutes" is meaningless when the spot keeps changing.</summary>
+    public double? StationarySeconds { get; init; }
+
     public DateTimeOffset? LastReportedUtc { get; init; }
 
     /// <summary>Seconds since the last report. A plain number rather than a TimeSpan, because

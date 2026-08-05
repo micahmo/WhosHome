@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { NotificationPreference, PresenceView } from './types'
-  import { formatAge, formatDistance, formatTravel, stateLabel } from './format'
+  import { formatAge, formatDistance, formatDwell, formatTravel, stateLabel } from './format'
 
   let {
     people,
@@ -63,10 +63,21 @@
         {#if person.state !== 'Home' && person.distanceMeters !== null}
           <span class="distance">{formatDistance(person.distanceMeters)}</span>
         {/if}
+        {#if person.stationarySeconds !== null && !person.isStale}
+          <span class="distance">{formatDwell(person.stationarySeconds)}</span>
+        {/if}
       </p>
 
-      {#if person.travelSeconds !== null}
-        <p class="travel">{formatTravel(person.travelSeconds)}</p>
+      {#if (person.isMoving && !person.isStale) || person.travelSeconds !== null}
+        <p class="travel">
+          {#if person.isMoving && !person.isStale}
+            <span class="moving">On the move</span>
+          {/if}
+          {#if person.travelSeconds !== null}
+            {#if person.isMoving && !person.isStale}<span class="sep">&middot;</span>{/if}
+            {formatTravel(person.travelSeconds)}
+          {/if}
+        </p>
       {/if}
 
       <p class="meta">
@@ -187,6 +198,10 @@
     margin: 0.15rem 0 0;
     font-size: 0.9rem;
     font-weight: 500;
+  }
+
+  .moving {
+    color: var(--nearby);
   }
 
   .meta {

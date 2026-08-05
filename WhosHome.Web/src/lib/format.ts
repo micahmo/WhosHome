@@ -41,6 +41,33 @@ export function formatTravel(seconds: number | null): string {
   return remainder === 0 ? `${hours} hr away` : `${hours} hr ${remainder} min away`
 }
 
+/**
+ * How long they have been put. Phrased as a duration rather than a timestamp, because "here for
+ * three hours" is the question people actually ask.
+ */
+export function formatDwell(seconds: number | null): string {
+  if (seconds === null) {
+    return ''
+  }
+
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 2) {
+    return 'just arrived'
+  }
+
+  if (minutes < 60) {
+    return `for ${minutes} min`
+  }
+
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) {
+    return hours === 1 ? 'for an hour' : `for ${hours} hours`
+  }
+
+  const days = Math.round(hours / 24)
+  return days === 1 ? 'for a day' : `for ${days} days`
+}
+
 /** Coarse relative age. Precision past "a few minutes" is noise here. */
 export function formatAge(seconds: number | null): string {
   if (seconds === null) {

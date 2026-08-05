@@ -27,6 +27,10 @@ public class PositionReport
     /// notifications, so losing it degrades to showing plain distance.</summary>
     public double? TravelSeconds { get; set; }
 
+    /// <summary>How far this fix is from the previous one. Null on a first report, since there is
+    /// nothing to compare against. Used to tell moving from parked.</summary>
+    public double? MovedMeters { get; set; }
+
     public double? AccuracyMeters { get; set; }
 
     public double? BatteryPercent { get; set; }

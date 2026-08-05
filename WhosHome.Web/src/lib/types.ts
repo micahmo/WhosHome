@@ -12,6 +12,10 @@ export interface PresenceView {
   distanceMeters: number | null
   /** Driving time home when routing gave a trustworthy answer. Null is normal. */
   travelSeconds: number | null
+  /** The latest fix showed real movement rather than GPS drift. */
+  isMoving: boolean
+  /** How long they have been in one spot. Null while moving. */
+  stationarySeconds: number | null
   lastReportedUtc: string | null
   /** Seconds since the last report, or null if there has never been one. */
   ageSeconds: number | null
