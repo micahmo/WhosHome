@@ -1,7 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ApiError, getPresence, getSession, isAdmin, signOut } from './api'
-  import type { PresenceView, Session } from './types'
+  import {
+    ApiError,
+    getNotificationPreferences,
+    getPresence,
+    getSession,
+    isAdmin,
+    setNotificationPreference,
+    signOut,
+  } from './api'
+  import type { NotificationPreference, PresenceView, Session } from './types'
   import Board from './Board.svelte'
   import Login from './Login.svelte'
   import InstallPrompt from './InstallPrompt.svelte'
@@ -14,6 +22,9 @@
   let people = $state<PresenceView[]>([])
   let starting = $state(true)
   let error = $state('')
+
+  // Held here rather than in NotifyToggle because the bells live on the board cards.
+  let preferences = $state<NotificationPreference[]>([])
 
   // Admins can read the board without being a person, so the machine used for provisioning
   // does not have to register itself as a household member just to look.
@@ -65,6 +76,35 @@
     }
   }
 
+  async function onPushEnabledChange(enabled: boolean) {
+    if (!enabled) {
+      preferences = []
+      return
+    }
+
+    try {
+      preferences = await getNotificationPreferences()
+    } catch {
+      // No banner for this: the bells simply do not appear.
+      preferences = []
+    }
+  }
+
+  async function togglePerson(preference: NotificationPreference) {
+    const next = !preference.enabled
+    // Optimistic, because a control that lags feels broken.
+    preferences = preferences.map((candidate) =>
+      candidate.personId === preference.personId ? { ...candidate, enabled: next } : candidate,
+    )
+
+    try {
+      await setNotificationPreference(preference.personId, next)
+    } catch {
+      error = `Could not change notifications for ${preference.name}.`
+      await onPushEnabledChange(true)
+    }
+  }
+
   async function onSignedIn(next: Session) {
     session = next
     await refresh()
@@ -74,6 +114,7 @@
     await signOut()
     session = null
     people = []
+    preferences = []
   }
 </script>
 
@@ -104,10 +145,10 @@
       <p class="error" role="alert">{error}</p>
     {/if}
 
-    <Board {people} />
+    <Board {people} {preferences} onTogglePerson={session ? togglePerson : undefined} />
 
     {#if session}
-      <NotifyToggle />
+      <NotifyToggle onEnabledChange={onPushEnabledChange} />
     {/if}
   {/if}
 </main>
@@ -126,7 +167,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
   }
 
   h1 {

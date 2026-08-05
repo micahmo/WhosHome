@@ -1,20 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    getNotificationPreferences,
-    getPushKey,
-    setNotificationPreference,
-    subscribeToPush,
-    unsubscribeFromPush,
-  } from './api'
-  import type { NotificationPreference } from './types'
+  import { getPushKey, subscribeToPush, unsubscribeFromPush } from './api'
+
+  // Only the browser-level permission lives here. Per-person choices are bells on the board, so
+  // the household is not listed twice on one screen.
+  let { onEnabledChange }: { onEnabledChange: (enabled: boolean) => void } = $props()
 
   let supported = $state(false)
   let enabled = $state(false)
   let blocked = $state(false)
   let busy = $state(false)
   let error = $state('')
-  let preferences = $state<NotificationPreference[]>([])
 
   onMount(async () => {
     supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -26,34 +22,8 @@
 
     const registration = await navigator.serviceWorker.ready
     enabled = (await registration.pushManager.getSubscription()) !== null
-
-    if (enabled) {
-      await loadPreferences()
-    }
+    onEnabledChange(enabled)
   })
-
-  async function loadPreferences() {
-    try {
-      preferences = await getNotificationPreferences()
-    } catch {
-      // Not worth an error banner: the toggles simply do not appear.
-    }
-  }
-
-  async function togglePerson(preference: NotificationPreference) {
-    const next = !preference.enabled
-    // Optimistic, because a checkbox that lags feels broken.
-    preferences = preferences.map((candidate) =>
-      candidate.personId === preference.personId ? { ...candidate, enabled: next } : candidate,
-    )
-
-    try {
-      await setNotificationPreference(preference.personId, next)
-    } catch {
-      error = `Could not change the setting for ${preference.name}.`
-      await loadPreferences()
-    }
-  }
 
   async function enable() {
     busy = true
@@ -77,7 +47,7 @@
       const json = subscription.toJSON()
       await subscribeToPush(subscription.endpoint, json.keys!.p256dh, json.keys!.auth)
       enabled = true
-      await loadPreferences()
+      onEnabledChange(true)
     } catch {
       error = 'Could not turn on notifications.'
     } finally {
@@ -97,7 +67,7 @@
         await subscription.unsubscribe()
       }
       enabled = false
-      preferences = []
+      onEnabledChange(false)
     } catch {
       error = 'Could not turn off notifications.'
     } finally {
@@ -128,24 +98,9 @@
       <button onclick={enabled ? disable : enable} disabled={busy}>
         {enabled ? 'Turn off notifications' : 'Notify me when people come and go'}
       </button>
-    {/if}
-
-    {#if enabled && preferences.length > 0}
-      <p class="muted">Tell me about</p>
-      <ul>
-        {#each preferences as preference (preference.personId)}
-          <li>
-            <label>
-              <input
-                type="checkbox"
-                checked={preference.enabled}
-                onchange={() => togglePerson(preference)}
-              />
-              <span>{preference.name}{preference.isSelf ? ' (you)' : ''}</span>
-            </label>
-          </li>
-        {/each}
-      </ul>
+      {#if enabled}
+        <p class="muted">Use the bell on each card to choose who.</p>
+      {/if}
     {/if}
 
     {#if error}<p class="error">{error}</p>{/if}
@@ -157,31 +112,6 @@
     margin-top: 1.5rem;
     padding-top: 1.25rem;
     border-top: 1px solid var(--line);
-  }
-
-  p {
-    margin: 1rem 0 0.5rem;
-    font-size: 0.8rem;
-  }
-
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.3rem 0;
-    font-size: 0.9rem;
-    cursor: pointer;
-  }
-
-  input[type='checkbox'] {
-    width: 1.1rem;
-    height: 1.1rem;
   }
 
   button {
@@ -201,6 +131,7 @@
   .muted {
     color: var(--muted);
     font-size: 0.8rem;
+    margin: 0.5rem 0 0;
   }
 
   .error {

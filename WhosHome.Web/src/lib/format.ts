@@ -1,17 +1,24 @@
 import type { PresenceState } from './types'
 
-/** Distance rounded to something a person would actually say out loud. */
+const metresPerMile = 1609.344
+const metresPerFoot = 0.3048
+
+/**
+ * Distance in the units the household actually thinks in. Feet close to home because "0.05 miles"
+ * means nothing to anyone, miles beyond that.
+ */
 export function formatDistance(meters: number | null): string {
   if (meters === null) {
     return ''
   }
 
-  if (meters < 1000) {
-    return `${Math.round(meters / 10) * 10} m`
+  const miles = meters / metresPerMile
+  if (miles < 0.1) {
+    const feet = Math.round(meters / metresPerFoot / 10) * 10
+    return `${feet} ft`
   }
 
-  const kilometers = meters / 1000
-  return kilometers < 10 ? `${kilometers.toFixed(1)} km` : `${Math.round(kilometers)} km`
+  return miles < 10 ? `${miles.toFixed(1)} mi` : `${Math.round(miles)} mi`
 }
 
 /** Coarse relative age. Precision past "a few minutes" is noise here. */
