@@ -100,7 +100,7 @@
   {#if starting}
     <p class="muted">Loading...</p>
   {:else if !admin}
-    <form onsubmit={enterAdmin}>
+    <form class="gate" onsubmit={enterAdmin}>
       <h1>Admin</h1>
       <p class="muted">Paste the admin token to manage the household from this browser.</p>
       <input
@@ -190,12 +190,17 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  /* Centred in the column to match the sign-in screen, which is the other thing you can
+     land on without a session. */
+  form.gate {
     max-width: 22rem;
+    margin: 3rem auto 0;
   }
 
   form.add {
     flex-direction: row;
-    max-width: none;
     margin: 0.5rem 0 1.25rem;
   }
 
