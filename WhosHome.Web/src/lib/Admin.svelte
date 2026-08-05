@@ -22,7 +22,14 @@
 
   /** Most recently created link, keyed by person, so several can be open at once. */
   let links = $state<Record<number, SetupLink>>({})
-  let copied = $state<number | null>(null)
+
+  /** Which button last copied, as "personId:what", so the feedback lands on the right one. */
+  let copied = $state<string | null>(null)
+
+  /** The setup page explains itself, so the message does not have to. */
+  function inviteText(url: string): string {
+    return `Join Who's Home: ${url}`
+  }
 
   onMount(async () => {
     try {
@@ -102,7 +109,7 @@
     error = ''
     try {
       await removePerson(person.id)
-      const { [person.id]: _discarded, ...rest } = links
+      const { [person.id]: _removedLink, ...rest } = links
       links = rest
       people = await listPeople()
     } catch {
@@ -112,10 +119,10 @@
     }
   }
 
-  async function copy(person: PersonSummary, url: string) {
+  async function copy(person: PersonSummary, what: 'link' | 'invite', text: string) {
     try {
-      await navigator.clipboard.writeText(url)
-      copied = person.id
+      await navigator.clipboard.writeText(text)
+      copied = `${person.id}:${what}`
       setTimeout(() => (copied = null), 2000)
     } catch {
       // Clipboard access needs a secure context; the link is on screen to copy by hand.
@@ -176,13 +183,21 @@
             {@const link = links[person.id]}
             <div class="link-box">
               <p class="muted small">
-                Send this to {person.name}. Code <strong>{link.code}</strong>. Expires in 24 hours,
-                and opening it does not use it up; entering the code does.
+                Send just the link. The page shows their code (<strong>{link.code}</strong>) and
+                the steps. Good for 24 hours.
               </p>
+
+              <button
+                class="secondary wide"
+                onclick={() => copy(person, 'invite', inviteText(link.setupUrl))}
+              >
+                {copied === `${person.id}:invite` ? 'Copied' : 'Copy invite'}
+              </button>
+
               <div class="url">
                 <code>{link.setupUrl}</code>
-                <button class="secondary" onclick={() => copy(person, link.setupUrl)}>
-                  {copied === person.id ? 'Copied' : 'Copy'}
+                <button class="secondary" onclick={() => copy(person, 'link', link.setupUrl)}>
+                  {copied === `${person.id}:link` ? 'Copied' : 'Copy'}
                 </button>
               </div>
             </div>
@@ -263,6 +278,21 @@
     color: var(--text);
     border: 1px solid var(--line);
     font-weight: 500;
+  }
+
+  button.wide {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Reserve room for the longer "done" label so swapping the text does not resize the button
+     and reflow the URL sitting next to it. */
+  .url button {
+    min-width: 5.75rem;
+  }
+
+  .actions button.secondary {
+    min-width: 7.5rem;
   }
 
   button.danger {
