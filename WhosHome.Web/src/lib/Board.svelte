@@ -21,6 +21,8 @@
 <ul class="board">
   {#each people as person (person.personId)}
     {@const preference = preferenceFor(person.personId)}
+    {@const settled = person.stationarySeconds !== null && !person.isStale}
+    {@const moving = person.isMoving && !person.isStale}
     <li class="card" class:stale={person.isStale}>
       <div class="head">
         <span class="who">
@@ -63,18 +65,22 @@
         {#if person.state !== 'Home' && person.distanceMeters !== null}
           <span class="distance">{formatDistance(person.distanceMeters)}</span>
         {/if}
-        {#if person.stationarySeconds !== null && !person.isStale}
-          <span class="distance">{formatDwell(person.stationarySeconds)}</span>
+        <!-- Only at home do "been home this long" and "been in one spot this long" mean the same
+             thing, so only here can the duration hang off the state without misleading. -->
+        {#if settled && person.state === 'Home'}
+          <span class="distance">for {formatDwell(person.stationarySeconds)}</span>
         {/if}
       </p>
 
-      {#if (person.isMoving && !person.isStale) || person.travelSeconds !== null}
+      {#if moving || (settled && person.state !== 'Home') || person.travelSeconds !== null}
         <p class="travel">
-          {#if person.isMoving && !person.isStale}
+          {#if moving}
             <span class="moving">On the move</span>
+          {:else if settled && person.state !== 'Home'}
+            <span class="muted">Stopped for {formatDwell(person.stationarySeconds)}</span>
           {/if}
           {#if person.travelSeconds !== null}
-            {#if person.isMoving && !person.isStale}<span class="sep">&middot;</span>{/if}
+            {#if moving || (settled && person.state !== 'Home')}<span class="sep">&middot;</span>{/if}
             {formatTravel(person.travelSeconds)}
           {/if}
         </p>
@@ -202,6 +208,10 @@
 
   .moving {
     color: var(--nearby);
+  }
+
+  .muted {
+    color: var(--muted);
   }
 
   .meta {

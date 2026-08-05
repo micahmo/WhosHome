@@ -42,8 +42,10 @@ export function formatTravel(seconds: number | null): string {
 }
 
 /**
- * How long they have been put. Phrased as a duration rather than a timestamp, because "here for
- * three hours" is the question people actually ask.
+ * A bare duration for how long someone has been in one spot. Deliberately returns no preposition:
+ * the caller supplies the wording, because "Home for 5 min" and "Stopped for 5 min" mean the same
+ * thing while "Away for 5 min" would read as five minutes away from home rather than five minutes
+ * parked somewhere.
  */
 export function formatDwell(seconds: number | null): string {
   if (seconds === null) {
@@ -51,21 +53,21 @@ export function formatDwell(seconds: number | null): string {
   }
 
   const minutes = Math.round(seconds / 60)
-  if (minutes < 2) {
-    return 'just arrived'
+  if (minutes < 1) {
+    return 'under a minute'
   }
 
   if (minutes < 60) {
-    return `for ${minutes} min`
+    return `${minutes} min`
   }
 
   const hours = Math.round(minutes / 60)
   if (hours < 24) {
-    return hours === 1 ? 'for an hour' : `for ${hours} hours`
+    return hours === 1 ? 'an hour' : `${hours} hours`
   }
 
   const days = Math.round(hours / 24)
-  return days === 1 ? 'for a day' : `for ${days} days`
+  return days === 1 ? 'a day' : `${days} days`
 }
 
 /** Coarse relative age. Precision past "a few minutes" is noise here. */
