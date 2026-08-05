@@ -8,7 +8,7 @@
     <Registry>https://ghcr.io/micahmo/whoshome</Registry>
     <GitHub>https://github.com/micahmo/WhosHome</GitHub>
     <Repository>ghcr.io/micahmo/whoshome:latest</Repository>
-    <Icon>https://raw.githubusercontent.com/micahmo/WhosHome/main/WhosHome.Web/public/favicon.svg</Icon>
+    <Icon>https://raw.githubusercontent.com/micahmo/WhosHome/main/WhosHome.Web/public/icon-192.png</Icon>
     <WebUI>http://[IP]:[PORT:8080]/</WebUI>
     <Networking>
         <Mode>bridge</Mode>

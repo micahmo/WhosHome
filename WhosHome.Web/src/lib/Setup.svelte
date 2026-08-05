@@ -8,13 +8,67 @@
   const appStore = 'https://apps.apple.com/us/app/traccar-client/id843156974'
   const playStore = 'https://play.google.com/store/apps/details?id=org.traccar.client'
 
+  // Verified in the client source: the "action" host starts and stops tracking with no
+  // confirmation dialog. The config link cannot switch tracking on, so this is the only way to
+  // avoid telling people to go hunting for a toggle.
+  const startTracking = 'org.traccar.client://action/start'
+
+  /** Chromium fires this so a site can offer its own install button. Safari never does. */
+  interface BeforeInstallPromptEvent extends Event {
+    prompt(): Promise<void>
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+  }
+
   let info = $state<SetupInfo | null>(null)
   let error = $state('')
   let loading = $state(true)
-  let isIos = $state(false)
 
-  onMount(async () => {
-    isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+  let isIos = $state(false)
+  let isInAppBrowser = $state(false)
+  let installed = $state(false)
+  let deferredPrompt = $state<BeforeInstallPromptEvent | null>(null)
+  let linkCopied = $state(false)
+
+  /**
+   * In-app browsers cannot install a web app at all: no beforeinstallprompt, and no Add to Home
+   * Screen in the menu. Detection is heuristic because there is no real API for it, so this
+   * covers the common messaging apps rather than pretending to be exhaustive.
+   */
+  function detectInAppBrowser(userAgent: string): boolean {
+    if (/; wv\)/.test(userAgent)) {
+      return true
+    }
+
+    if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|LinkedInApp|MicroMessenger|WhatsApp/i.test(userAgent)) {
+      return true
+    }
+
+    // iOS web views run WebKit but omit the Safari token that real Safari includes.
+    const iosDevice = /iPhone|iPad|iPod/.test(userAgent)
+    const realBrowser = /Safari|CriOS|FxiOS|EdgiOS/.test(userAgent)
+    return iosDevice && !realBrowser
+  }
+
+  onMount(() => {
+    const userAgent = window.navigator.userAgent
+    isIos = /iPhone|iPad|iPod/i.test(userAgent)
+    isInAppBrowser = detectInAppBrowser(userAgent)
+    installed =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+
+    function capture(event: Event) {
+      event.preventDefault()
+      deferredPrompt = event as BeforeInstallPromptEvent
+    }
+
+    window.addEventListener('beforeinstallprompt', capture)
+    void load()
+
+    return () => window.removeEventListener('beforeinstallprompt', capture)
+  })
+
+  async function load() {
     try {
       info = await getSetup(token)
     } catch {
@@ -22,7 +76,26 @@
     } finally {
       loading = false
     }
-  })
+  }
+
+  async function install() {
+    if (!deferredPrompt) {
+      return
+    }
+    await deferredPrompt.prompt()
+    await deferredPrompt.userChoice
+    deferredPrompt = null
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      linkCopied = true
+      setTimeout(() => (linkCopied = false), 2000)
+    } catch {
+      // Clipboard needs a focused, secure context. The address bar is the fallback.
+    }
+  }
 </script>
 
 <main>
@@ -32,8 +105,25 @@
     <h1>Who's Home</h1>
     <p class="error">{error}</p>
   {:else}
+    {#if isInAppBrowser}
+      <aside class="notice">
+        <strong>Open this in your browser first</strong>
+        <p>
+          You are in a messaging app's built-in browser, which cannot install apps.
+          {#if isIos}
+            Tap the compass or Safari icon to reopen this page, or copy the link and paste it
+            into Safari.
+          {:else}
+            Tap the three dot menu and choose "Open in Chrome", or copy the link and paste it
+            into Chrome.
+          {/if}
+        </p>
+        <button onclick={copyLink}>{linkCopied ? 'Link copied' : 'Copy this link'}</button>
+      </aside>
+    {/if}
+
     <h1>Hi {info.name}</h1>
-    <p class="muted">Three steps, about two minutes.</p>
+    <p class="muted">Four steps, a couple of minutes. Keep this page open as you go.</p>
 
     <ol>
       <li>
@@ -48,17 +138,12 @@
       </li>
 
       <li>
-        <h2>Set it up</h2>
+        <h2>Point it at the right server</h2>
         <p class="muted">
-          Come back here once it is installed and tap below. It fills in the settings for you,
-          then turn tracking on with the switch at the top of the app.
+          Come back here once it is installed and tap below. Traccar Client opens and asks to
+          apply the settings. Say yes.
         </p>
         <a class="button" href={info.traccarUrl}>Configure Traccar Client</a>
-        <p class="muted small">
-          When it asks for location, choose <strong>Always</strong>. Anything less and it stops
-          reporting the moment you close the app. Also avoid swiping the app away, which stops
-          it entirely on iOS.
-        </p>
         <details>
           <summary>Do it by hand instead</summary>
           <p class="muted small">Server URL</p>
@@ -67,24 +152,61 @@
       </li>
 
       <li>
-        <h2>Sign in here</h2>
-        {#if info.code}
-          <p class="muted">Your code:</p>
-          <p class="code">{info.code}</p>
-        {:else}
-          <p class="muted">Ask for a fresh setup link to get a code.</p>
-        {/if}
-        <p class="muted small">
-          {#if isIos}
-            Tap Share, then "Add to Home Screen". Open Who's Home from the new icon and enter
-            the code there.
-          {:else}
-            Add Who's Home to your home screen from the browser menu, then open it and enter the
-            code.
-          {/if}
-          Install it first, then enter the code, or you will end up signed in to the browser and
-          not the app.
+        <h2>Start tracking</h2>
+        <p class="muted">
+          Configuring it does not switch it on. Tap below, or open Traccar Client and turn on
+          the switch labeled "Continuous tracking".
         </p>
+        <a class="button" href={startTracking}>Start tracking</a>
+        <p class="muted small">
+          It asks for location permission at this point, not earlier.
+          {#if isIos}
+            Choose <strong>Allow While Using App</strong>, and accept if iOS later offers to
+            change it to <strong>Always Allow</strong>. Without that it stops reporting once you
+            leave the app, and do not swipe Traccar Client away, which stops it completely.
+          {:else}
+            The first prompt only offers <strong>While using the app</strong>, which is not
+            enough on its own. Accept it, then open Settings, Apps, Traccar Client, Permissions,
+            Location and choose <strong>Allow all the time</strong>.
+          {/if}
+        </p>
+        <p class="muted small">
+          Check that "Continuous tracking" is on before moving on. If it is off, nothing is
+          being sent.
+        </p>
+      </li>
+
+      <li>
+        <h2>Add Who's Home to your home screen</h2>
+
+        {#if installed}
+          <p class="muted">Already installed. Enter your code below.</p>
+        {:else if deferredPrompt}
+          <p class="muted">One tap, then open it from the new icon.</p>
+          <button class="button" onclick={install}>Install Who's Home</button>
+        {:else if isIos}
+          <p class="muted">
+            Tap the Share button at the bottom of Safari, scroll down, and choose
+            <strong>Add to Home Screen</strong>. Then open Who's Home from the new icon.
+          </p>
+        {:else}
+          <p class="muted">
+            Open the browser menu, the three dots in the corner, and choose
+            <strong>Install app</strong> or <strong>Add to Home screen</strong>. Then open Who's
+            Home from the new icon.
+          </p>
+        {/if}
+
+        {#if info.code}
+          <p class="muted small">Your code:</p>
+          <p class="code">{info.code}</p>
+          <p class="muted small">
+            Enter it in the app you just added, not in this browser tab. It works once, so using
+            it in the wrong place means asking for a new one.
+          </p>
+        {:else}
+          <p class="muted">This code has already been used. Ask for a fresh setup link.</p>
+        {/if}
       </li>
     </ol>
 
@@ -123,14 +245,41 @@
     margin-bottom: 1.75rem;
   }
 
+  .notice {
+    border: 1px solid var(--nearby);
+    border-radius: 0.6rem;
+    padding: 0.85rem;
+    margin-bottom: 1.5rem;
+    background: var(--surface);
+  }
+
+  .notice p {
+    margin: 0.35rem 0 0.7rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .notice button {
+    border: 1px solid var(--line);
+    background: none;
+    color: inherit;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+
   .button {
     display: inline-block;
     margin: 0.5rem 0;
     padding: 0.7rem 1.1rem;
+    border: none;
     border-radius: 0.5rem;
     background: var(--accent);
     color: var(--accent-text);
     font-weight: 600;
+    font-size: 1rem;
+    font-family: inherit;
     text-decoration: none;
   }
 
