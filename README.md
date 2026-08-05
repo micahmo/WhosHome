@@ -15,11 +15,20 @@ coordinate pair exists per person, on the person row, overwritten on every repor
 never accumulates a location history. It is kept because routing needs an origin to measure from.
 The read API returns distances, states and durations, and no coordinates.
 
-The last known state is always shown, however old it is. Traccar Client stops reporting when a
-phone is stationary, does not resume after a reboot, and can be silently disabled by an app
-update, so a report older than `StaleAfter` is flagged with `isStale` and its age for the UI to
-present as history rather than as current fact. Only a person who has never reported at all
-reads as `Unknown`.
+The last known state is always shown, however old it is. Only a person who has never reported at
+all reads as `Unknown`.
+
+Traccar Client has stop detection on by default, so a stationary phone stops sending positions
+entirely, and hours of silence are the normal case for someone sitting at home. The setup link
+therefore also sets a `heartbeat`, which makes the client check in on a timer while it is stopped.
+A heartbeat carries a timestamp and no coordinates: it says the phone is alive and has not moved.
+That is what separates "parked" from "we have lost this phone", and without it the two are
+indistinguishable from the server.
+
+So age counts from the last contact of either kind, not from the last position, and someone reads
+as stale only once the heartbeats stop too. At that point something is genuinely wrong: tracking
+switched off, an app update, or a reboot it did not survive. A stale card stays at full
+brightness and says so in words. Dimming it reads as though the person has been disabled.
 
 Each card also shows how long that person has been in one spot. Movement is measured against the
 previous fix rather than against home, so driving in a circle still counts as moving, and
@@ -89,7 +98,8 @@ Adding them to `appsettings.json` would silently override the values below.
 | `HomeRadiusMeters` | 150 | Below about 150 m this flaps, since the client's distance filter is 75 m |
 | `NearbyRadiusMeters` | 8047 | Five miles. Also the ring that triggers a "getting close" notification |
 | `MovementThresholdMeters` | 200 | Above the roughly 100 m GPS noise floor, so a parked phone reads as still |
-| `StaleAfter` | 45 min | Older than this is flagged stale; the state is still shown |
+| `StaleAfter` | 45 min | No contact of any kind for this long is flagged stale; the state is still shown |
+| `HeartbeatInterval` | 15 min | How often a stopped client checks in. Handed to it in the setup link |
 | `ReportRetention` | 30 d | How long derived reports survive |
 | `DatabasePath` | `/data/whoshome.db` | Must be a mounted volume in the container |
 | `AdminToken` | unset | Admin is disabled entirely when unset |
@@ -160,8 +170,11 @@ Traccar Client accepts configuration over a custom URL scheme. The parameter nam
 `id`, not `serverUrl` and `deviceId`.
 
 ```
-org.traccar.client://configure?url=<urlencoded server /ingest URL>&id=<deviceId>&accuracy=medium&distance=75&interval=300&stop_detection=true
+org.traccar.client://configure?url=<urlencoded server /ingest URL>&id=<deviceId>&accuracy=medium&distance=75&interval=300&heartbeat=900&stop_detection=true
 ```
+
+`heartbeat` is in seconds and defaults to 0, meaning off, so it has to be set explicitly. Settings
+apply live, so re-sending the link to an already configured phone is enough to change them.
 
 Any host works except `action`, which is reserved. `org.traccar.client://action/start` and
 `org.traccar.client://action/stop` toggle tracking with no confirmation dialog. Applying settings
@@ -206,9 +219,9 @@ Traccar Client reports roughly every 90 seconds regardless of the configured int
 [upstream issue](https://github.com/traccar/traccar-client/issues/198). It costs battery and
 nothing else.
 
-Tracking does not resume after a phone reboot, and an app update can switch it off. Nothing on the
-server can detect the difference between a phone that has stopped reporting and a person who has
-not moved, which is why age is shown on every card.
+Tracking does not resume after a phone reboot, and an app update can switch it off. Heartbeats make
+that visible rather than preventing it: the card goes stale and says the phone is not checking in,
+but only the person holding the phone can start it again.
 
 Routing only works inside the region OSRM was built for. Positions outside it are discarded, so
 travel time disappears rather than showing a wrong number.

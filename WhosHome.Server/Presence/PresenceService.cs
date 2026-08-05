@@ -55,6 +55,7 @@ public class PresenceService(
         person.LastLatitude = latitude;
         person.LastLongitude = longitude;
         person.LastState = currentState;
+        person.LastSeenUtc = now;
 
         // Only worth asking when they are actually somewhere else. "0 minutes away" for someone
         // sitting at home is not information, and skipping it halves the routing traffic.
@@ -78,6 +79,19 @@ public class PresenceService(
         await context.SaveChangesAsync(cancellationToken);
 
         return new RecordedReport(distanceMeters, previousState, currentState);
+    }
+
+    /// <summary>
+    /// Records contact without a position. With stop detection enabled the client goes quiet while
+    /// stationary, so these are the only thing separating a parked phone from a lost one. No report
+    /// row is written, because nothing about the position has changed.
+    /// </summary>
+    public async Task RecordHeartbeatAsync(Person person, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(person);
+
+        person.LastSeenUtc = timeProvider.GetUtcNow();
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<PresenceView>> GetPresenceAsync(CancellationToken cancellationToken)
@@ -111,21 +125,28 @@ public class PresenceService(
     {
         if (latest is null)
         {
+            // Possible to have heard from a device before it ever sent a position, so contact
+            // still decides staleness here rather than assuming the worst.
             return new PresenceView
             {
                 PersonId = person.Id,
                 Name = person.Name,
                 State = PresenceState.Unknown,
                 IsMoving = false,
-                IsStale = true,
+                LastSeenUtc = person.LastSeenUtc,
+                AgeSeconds = person.LastSeenUtc is null ? null : (now - person.LastSeenUtc.Value).TotalSeconds,
+                IsStale = person.LastSeenUtc is null || now - person.LastSeenUtc.Value > _options.StaleAfter,
             };
         }
 
-        TimeSpan age = now - latest.ReceivedUtc;
+        // Age is time since the device last made contact, not since it last moved. A stationary
+        // phone heartbeats without sending a position, so measuring from the last report would call
+        // someone stale for the ordinary act of sitting still.
+        TimeSpan age = now - (person.LastSeenUtc ?? latest.ReceivedUtc);
         bool isMoving = latest.MovedMeters > _options.MovementThresholdMeters;
 
         // The last known state is always reported, however old. Discarding it would throw away
-        // real information; the UI shows the age alongside and greys out stale entries.
+        // real information; the UI shows the age alongside.
         return new PresenceView
         {
             PersonId = person.Id,
@@ -140,8 +161,7 @@ public class PresenceService(
                 ? null
                 : (now - person.StationarySinceUtc.Value).TotalSeconds,
             StationarySinceUtc = isMoving ? null : person.StationarySinceUtc,
-            LastReportedUtc = latest.ReportedUtc,
-            LastReceivedUtc = latest.ReceivedUtc,
+            LastSeenUtc = person.LastSeenUtc ?? latest.ReceivedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,
             BatteryPercent = latest.BatteryPercent,

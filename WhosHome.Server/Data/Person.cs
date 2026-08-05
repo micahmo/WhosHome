@@ -40,6 +40,13 @@ public class Person
     /// rather than re-notified on every report while someone sits at home.</summary>
     public Presence.PresenceState LastState { get; set; } = Presence.PresenceState.Unknown;
 
+    /// <summary>
+    /// The last time the device made contact at all, whether that was a position or a heartbeat.
+    /// This drives the age shown on the board and whether someone reads as stale, because with
+    /// stop detection enabled a phone that has not moved sends nothing for hours quite normally.
+    /// </summary>
+    public DateTimeOffset? LastSeenUtc { get; set; }
+
     /// <summary>When this person last settled in one spot. Reset whenever they move further than
     /// the movement threshold, so "here for two hours" measures the current stop rather than the
     /// time since they were last seen.</summary>

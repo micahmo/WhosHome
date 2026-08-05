@@ -174,10 +174,19 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         return Results.BadRequest(new { error = "Unknown device." });
     }
 
+    // A heartbeat carries no position: the device is alive and has not moved. Recording it as
+    // contact is what stops a stationary phone from looking like a lost one.
+    if (report!.IsHeartbeat)
+    {
+        await presence.RecordHeartbeatAsync(person, cancellationToken);
+        logger.LogDebug("Heartbeat from {Name}.", person.Name);
+        return Results.Ok();
+    }
+
     RecordedReport recorded = await presence.RecordAsync(
         person,
-        report!.Latitude,
-        report.Longitude,
+        report.Latitude!.Value,
+        report.Longitude!.Value,
         report.Timestamp,
         report.AccuracyMeters,
         report.BatteryPercent,
@@ -611,9 +620,11 @@ app.MapGet("/api/setup/{token}", async (
     string token,
     HttpContext httpContext,
     WhosHomeContext context,
+    IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     CancellationToken cancellationToken) =>
 {
+    WhosHomeOptions current = options.Value;
     DateTimeOffset now = timeProvider.GetUtcNow();
 
     Person? person = await context.People
@@ -632,11 +643,14 @@ app.MapGet("/api/setup/{token}", async (
         name = person.Name,
         code = person.LoginCode,
         ingestUrl,
-        // Verified against the Traccar Client source: custom scheme, any host except "action",
-        // and the parameter names are url/id, not serverUrl/deviceId as the forums claim.
+        // Custom scheme, any host except "action", and the parameter names are url/id.
+        // heartbeat is what makes silence meaningful: stop_detection deliberately stops sending
+        // positions while stationary, so without a periodic check-in there is no way to tell a
+        // parked phone from one that has stopped working.
         traccarUrl =
             $"org.traccar.client://configure?url={Uri.EscapeDataString(ingestUrl)}"
-            + $"&id={person.DeviceId}&accuracy=medium&distance=75&interval=300&stop_detection=true",
+            + $"&id={person.DeviceId}&accuracy=medium&distance=75&interval=300"
+            + $"&heartbeat={(int)current.HeartbeatInterval.TotalSeconds}&stop_detection=true",
         expiresUtc = person.SetupTokenExpiresUtc,
     });
 }).RequireRateLimiting(SignInPolicy);

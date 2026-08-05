@@ -17,11 +17,16 @@ public class WhosHomeOptions
     /// enough to be a useful heads up and close enough not to fire on the daily commute.</summary>
     public double NearbyRadiusMeters { get; set; } = 8047;
 
-    /// <summary>How long without a report before the last known state is presented as history
-    /// rather than as current. The state is still shown; only its presentation changes.
-    /// Traccar Client stops reporting when stationary, does not resume after a phone reboot,
-    /// and can be silently disabled by an app update, so age has to be visible.</summary>
+    /// <summary>How long without any contact before someone reads as stale. Contact includes
+    /// heartbeats, so this measures "the phone has stopped talking to us" rather than "the person
+    /// has not moved". Should be a small multiple of <see cref="HeartbeatInterval"/> so a single
+    /// missed check-in is tolerated.</summary>
     public TimeSpan StaleAfter { get; set; } = TimeSpan.FromMinutes(45);
+
+    /// <summary>How often the client should check in while stationary, handed to it in the setup
+    /// link. Without this, stop detection means a parked phone sends nothing for hours and there is
+    /// no way to distinguish that from one that has stopped working.</summary>
+    public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>How far a fix must be from the previous one to count as movement rather than GPS
     /// noise. Reports arrive with around 100 m accuracy and Traccar Client's own distance filter

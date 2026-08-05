@@ -39,7 +39,7 @@
     {@const age =
       formatAge(person.ageSeconds) +
       (deservesTimestamp(person.ageSeconds)
-        ? ` (at ${formatTimestamp(person.lastReceivedUtc)})`
+        ? ` (at ${formatTimestamp(person.lastSeenUtc)})`
         : '')}
     <li class="card" class:stale={person.isStale}>
       <div class="head">
@@ -105,6 +105,11 @@
       {/if}
 
       <p class="meta">
+        <!-- Said in words rather than implied by styling. Someone glancing at a faded card guesses
+             at what it means, and "switched off" is the guess they land on. -->
+        {#if person.isStale && person.ageSeconds !== null}
+          <span class="quiet">Phone not checking in</span><span class="sep">&middot;</span>
+        {/if}
         {age}
         {#if person.batteryPercent !== null}
           <span class="sep">&middot;</span>{Math.round(person.batteryPercent)}% battery
@@ -132,11 +137,6 @@
     background: var(--surface);
   }
 
-  /* Stale entries are still shown, just visibly presented as history rather than fact. */
-  .card.stale {
-    opacity: 0.5;
-  }
-
   .head {
     display: flex;
     align-items: center;
@@ -152,23 +152,32 @@
   }
 
   .dot {
+    --state-color: var(--muted);
     width: 0.7rem;
     height: 0.7rem;
     border-radius: 50%;
     flex-shrink: 0;
-    background: var(--muted);
+    background: var(--state-color);
   }
 
   .dot[data-state='Home'] {
-    background: var(--home);
+    --state-color: var(--home);
   }
 
   .dot[data-state='Nearby'] {
-    background: var(--nearby);
+    --state-color: var(--nearby);
   }
 
   .dot[data-state='Away'] {
-    background: var(--away);
+    --state-color: var(--away);
+  }
+
+  /* A stale card stays at full brightness. Dimming it looks like the person has been disabled, when
+     all that has happened is that their phone stopped talking to us. The dot keeps its colour but
+     goes hollow, which reads as "this was true a while ago". */
+  .card.stale .dot {
+    background: transparent;
+    box-shadow: inset 0 0 0 0.14rem var(--state-color);
   }
 
   .name {
@@ -237,6 +246,11 @@
     font-size: 0.8rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Amber rather than red: a quiet phone is worth knowing about, but it is not a failure. */
+  .quiet {
+    color: var(--nearby);
   }
 
   .sep {

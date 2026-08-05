@@ -4,15 +4,24 @@ namespace WhosHome.Server.Ingest;
 
 /// <summary>
 /// One decoded OsmAnd protocol report. Traccar Client speaks this over plain HTTP with the
-/// values in either the query string or a form body. Only id, lat and lon are mandatory.
+/// values in either the query string or a form body. Only the device id is mandatory: with a
+/// heartbeat interval configured, the client also checks in without a position while stationary.
 /// </summary>
 public sealed record OsmAndReport(
     string DeviceId,
-    double Latitude,
-    double Longitude,
+    double? Latitude,
+    double? Longitude,
     DateTimeOffset Timestamp,
     double? AccuracyMeters,
-    double? BatteryPercent);
+    double? BatteryPercent)
+{
+    /// <summary>
+    /// A report with no coordinates means the device is alive but has not moved. Accepting these
+    /// rather than rejecting them is what lets the board tell "parked and quiet by design" apart
+    /// from "we have lost this phone", which otherwise look identical from here.
+    /// </summary>
+    public bool IsHeartbeat => Latitude is null || Longitude is null;
+}
 
 public static class OsmAndParser
 {
@@ -36,19 +45,17 @@ public static class OsmAndParser
             return false;
         }
 
-        if (!TryGetDouble(values, "lat", out double latitude))
+        bool hasLatitude = TryGetDouble(values, "lat", out double latitude);
+        bool hasLongitude = TryGetDouble(values, "lon", out double longitude);
+
+        // Both or neither. One without the other is a malformed report rather than a heartbeat.
+        if (hasLatitude != hasLongitude)
         {
-            error = "Missing or invalid lat.";
+            error = "A position needs both lat and lon.";
             return false;
         }
 
-        if (!TryGetDouble(values, "lon", out double longitude))
-        {
-            error = "Missing or invalid lon.";
-            return false;
-        }
-
-        if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
+        if (hasLatitude && (latitude is < -90 or > 90 || longitude is < -180 or > 180))
         {
             error = "Coordinates out of range.";
             return false;
@@ -59,7 +66,13 @@ public static class OsmAndParser
         double? accuracy = TryGetDouble(values, "accuracy", out double accuracyValue) ? accuracyValue : null;
         double? battery = TryGetDouble(values, "batt", out double batteryValue) ? batteryValue : null;
 
-        report = new OsmAndReport(deviceId, latitude, longitude, timestamp, accuracy, battery);
+        report = new OsmAndReport(
+            deviceId,
+            hasLatitude ? latitude : null,
+            hasLongitude ? longitude : null,
+            timestamp,
+            accuracy,
+            battery);
         error = null;
         return true;
     }

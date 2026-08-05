@@ -27,24 +27,21 @@ public sealed record PresenceView
     /// minutes" is meaningless when the spot keeps changing.</summary>
     public double? StationarySeconds { get; init; }
 
-    public DateTimeOffset? LastReportedUtc { get; init; }
-
-    /// <summary>When the server received the last report. Sent so the client can show an absolute
-    /// time that agrees with the age, rather than subtracting a duration from its own clock and
-    /// drifting whenever the phone and the server disagree.</summary>
-    public DateTimeOffset? LastReceivedUtc { get; init; }
+    /// <summary>When the device last made contact, by position or heartbeat. Sent absolute so the
+    /// client can show a time that agrees with the age, rather than subtracting a duration from its
+    /// own clock and drifting whenever the phone and the server disagree.</summary>
+    public DateTimeOffset? LastSeenUtc { get; init; }
 
     /// <summary>When the current stop began, for the same reason.</summary>
     public DateTimeOffset? StationarySinceUtc { get; init; }
 
-    /// <summary>Seconds since the last report. A plain number rather than a TimeSpan, because
-    /// .NET's TimeSpan JSON format is a .NET-ism the browser should not have to parse.</summary>
+    /// <summary>Seconds since the device last made contact. A plain number rather than a TimeSpan,
+    /// because .NET's TimeSpan JSON format is a .NET-ism the browser should not have to parse.</summary>
     public double? AgeSeconds { get; init; }
 
-    /// <summary>True when the last report is older than the configured stale window. The state
-    /// is still the last known one; this tells the UI to present it as history rather than as
-    /// current fact, which matters because Traccar Client does not resume after a phone reboot
-    /// and can be silently disabled by an app update.</summary>
+    /// <summary>True when the device has not made contact within the stale window, not merely when
+    /// it has not moved. A stationary phone heartbeats, so this means something is actually wrong:
+    /// tracking switched off, an app update, or a reboot it did not survive.</summary>
     public required bool IsStale { get; init; }
 
     public double? BatteryPercent { get; init; }
