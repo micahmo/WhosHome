@@ -71,10 +71,12 @@ builder.Services.AddAuthorization();
 
 WebApplication app = builder.Build();
 
+// Migrations rather than EnsureCreated, so schema changes can reach a database that already
+// has the household's history in it.
 using (IServiceScope startupScope = app.Services.CreateScope())
 {
     WhosHomeContext startupContext = startupScope.ServiceProvider.GetRequiredService<WhosHomeContext>();
-    await startupContext.Database.EnsureCreatedAsync();
+    await startupContext.Database.MigrateAsync();
 }
 
 app.UseDefaultFiles();

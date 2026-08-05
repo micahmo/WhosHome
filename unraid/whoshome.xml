@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container>
+    <TemplateURL>https://raw.githubusercontent.com/micahmo/docker-templates/master/micahmo/whoshome.xml</TemplateURL>
+    <Name>WhosHome</Name>
+    <Project>https://github.com/micahmo/WhosHome</Project>
+    <Overview>A household presence board. Shows who is home, who is nearby, and who is away, without showing anyone's actual location. Household members install Traccar Client, which reports over the OsmAnd protocol; the viewer is a web app that installs to the home screen.</Overview>
+    <Description>A household presence board. Shows who is home, who is nearby, and who is away, without showing anyone's actual location. Distance is computed on arrival and only the result is stored, so the database never accumulates a location history.</Description>
+    <Registry>https://ghcr.io/micahmo/whoshome</Registry>
+    <GitHub>https://github.com/micahmo/WhosHome</GitHub>
+    <Repository>ghcr.io/micahmo/whoshome:latest</Repository>
+    <Icon>https://raw.githubusercontent.com/micahmo/WhosHome/main/WhosHome.Web/public/favicon.svg</Icon>
+    <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+    <Networking>
+        <Mode>bridge</Mode>
+    </Networking>
+    <Config Name="Data" Target="/data" Default="/mnt/user/appdata/whoshome" Mode="rw" Description="Holds the SQLite database and the keys that sign session cookies. This must persist: losing it loses the household's history and signs everyone out." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/whoshome</Config>
+    <Config Name="Port" Target="8080" Default="5199" Mode="tcp" Description="HTTP port. Put this behind a reverse proxy or a tunnel rather than exposing it directly." Type="Port" Display="always" Required="true" Mask="false">5199</Config>
+    <Config Name="Home Latitude" Target="WhosHome__HomeLatitude" Default="" Mode="" Description="Latitude of home. Distances are measured from here, so this must be set or everyone will read as very far away." Type="Variable" Display="always" Required="true" Mask="false"/>
+    <Config Name="Home Longitude" Target="WhosHome__HomeLongitude" Default="" Mode="" Description="Longitude of home." Type="Variable" Display="always" Required="true" Mask="false"/>
+    <Config Name="Admin Token" Target="WhosHome__AdminToken" Default="" Mode="" Description="Shared secret for the admin endpoints that create household members and mint sign-in codes. Use something long and random. Admin endpoints are disabled entirely when this is unset." Type="Variable" Display="always" Required="true" Mask="true"/>
+    <Config Name="Home Radius (meters)" Target="WhosHome__HomeRadiusMeters" Default="150" Mode="" Description="Inside this radius a person reads as home. Below about 150 m this flaps, because Traccar Client's default distance filter is 75 m." Type="Variable" Display="always" Required="false" Mask="false">150</Config>
+    <Config Name="Nearby Radius (meters)" Target="WhosHome__NearbyRadiusMeters" Default="3000" Mode="" Description="Inside this radius a person reads as nearby rather than away." Type="Variable" Display="always" Required="false" Mask="false">3000</Config>
+    <Config Name="Stale After" Target="WhosHome__StaleAfter" Default="00:45:00" Mode="" Description="How long without a report before the last known state is presented as history rather than as current. Format is hh:mm:ss." Type="Variable" Display="advanced" Required="false" Mask="false">00:45:00</Config>
+    <Config Name="Report Retention" Target="WhosHome__ReportRetention" Default="30.00:00:00" Mode="" Description="How long derived distance reports are kept before deletion. Format is d.hh:mm:ss." Type="Variable" Display="advanced" Required="false" Mask="false">30.00:00:00</Config>
+    <RestartPolicy>unless-stopped</RestartPolicy>
+</Container>
