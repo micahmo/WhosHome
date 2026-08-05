@@ -12,8 +12,10 @@ public class WhosHomeOptions
     /// distance filter is 75 m, so anything below about 150 m will flap.</summary>
     public double HomeRadiusMeters { get; set; } = 150;
 
-    /// <summary>Inside this radius a person reads as nearby rather than away.</summary>
-    public double NearbyRadiusMeters { get; set; } = 3000;
+    /// <summary>Inside this radius a person reads as nearby rather than away, and crossing into
+    /// it is what triggers a "getting close" notification. Five miles by default, which is far
+    /// enough to be a useful heads up and close enough not to fire on the daily commute.</summary>
+    public double NearbyRadiusMeters { get; set; } = 8047;
 
     /// <summary>How long without a report before the last known state is presented as history
     /// rather than as current. The state is still shown; only its presentation changes.
@@ -47,4 +49,9 @@ public class WhosHomeOptions
     /// <summary>Sign-in attempts allowed per client per minute. Six digits is a million
     /// combinations, which is only out of reach if attempts are capped.</summary>
     public int SignInAttemptsPerMinute { get; set; } = 10;
+
+
+    /// <summary>Contact address included in the VAPID token. Push services want a way to reach
+    /// whoever operates the server if it misbehaves.</summary>
+    public string VapidSubject { get; set; } = "mailto:admin@localhost";
 }

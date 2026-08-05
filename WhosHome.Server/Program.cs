@@ -2,10 +2,12 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Lib.Net.Http.WebPush;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -14,6 +16,7 @@ using WhosHome.Server.Auth;
 using WhosHome.Server.Configuration;
 using WhosHome.Server.Data;
 using WhosHome.Server.Ingest;
+using WhosHome.Server.Notifications;
 using WhosHome.Server.Presence;
 using WhosHome.Server.Retention;
 
@@ -40,6 +43,19 @@ builder.Services.AddDbContext<WhosHomeContext>(dbContextOptions =>
     dbContextOptions.UseSqlite($"Data Source={databasePath}"));
 builder.Services.AddScoped<PresenceService>();
 builder.Services.AddHostedService<RetentionService>();
+
+// Web push needs a stable VAPID keypair. Generated on first run and kept on the volume, because
+// changing it silently invalidates every existing subscription.
+using (ILoggerFactory startupLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole()))
+{
+    VapidKeys vapidKeys = VapidKeyStore.LoadOrCreate(
+        databaseDirectory,
+        startupLoggerFactory.CreateLogger(nameof(VapidKeyStore)));
+    builder.Services.AddSingleton(vapidKeys);
+}
+
+builder.Services.AddHttpClient<PushServiceClient>();
+builder.Services.AddScoped<ArrivalNotifier>();
 
 // Session cookies are signed with Data Protection keys. Left at the default they live in the
 // container filesystem and vanish on every image update, silently signing the whole household
@@ -99,6 +115,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     HttpRequest request,
     WhosHomeContext context,
     PresenceService presence,
+    ArrivalNotifier notifier,
     TimeProvider timeProvider,
     ILogger<Program> logger,
     CancellationToken cancellationToken) =>
@@ -121,7 +138,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         return Results.BadRequest(new { error = "Unknown device." });
     }
 
-    double distanceMeters = await presence.RecordAsync(
+    RecordedReport recorded = await presence.RecordAsync(
         person,
         report!.Latitude,
         report.Longitude,
@@ -131,13 +148,156 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         cancellationToken);
 
     logger.LogInformation(
-        "Report from {Name}: {Distance:F0} m from home, device clock {Reported:o}.",
+        "Report from {Name}: {Distance:F0} m from home, {Previous} to {Current}, device clock {Reported:o}.",
         person.Name,
-        distanceMeters,
+        recorded.DistanceMeters,
+        recorded.PreviousState,
+        recorded.CurrentState,
         report.Timestamp);
+
+    await notifier.NotifyIfApproachingAsync(
+        person,
+        recorded.PreviousState,
+        recorded.CurrentState,
+        cancellationToken);
 
     return Results.Ok();
 });
+
+// ---- Notifications ----
+
+// The browser needs the public half of the VAPID pair to create a subscription. It is public by
+// design and identifies this server to the push service.
+app.MapGet("/api/push/key", (VapidKeys keys) => Results.Ok(new { publicKey = keys.PublicKey }));
+
+app.MapPost("/api/push/subscribe", async (
+    ClaimsPrincipal user,
+    SubscribeRequest body,
+    WhosHomeContext context,
+    TimeProvider timeProvider,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(body.Endpoint)
+        || string.IsNullOrWhiteSpace(body.P256dh)
+        || string.IsNullOrWhiteSpace(body.Auth))
+    {
+        return Results.BadRequest(new { error = "Incomplete subscription." });
+    }
+
+    int personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    DeviceSubscription? existing = await context.Subscriptions
+        .FirstOrDefaultAsync(subscription => subscription.Endpoint == body.Endpoint, cancellationToken);
+
+    if (existing is not null)
+    {
+        // Browsers can hand back the same endpoint with rotated keys, and the person may have
+        // changed if a device was passed on, so refresh rather than duplicate.
+        existing.PersonId = personId;
+        existing.P256dh = body.P256dh;
+        existing.Auth = body.Auth;
+    }
+    else
+    {
+        context.Subscriptions.Add(new DeviceSubscription
+        {
+            PersonId = personId,
+            Endpoint = body.Endpoint,
+            P256dh = body.P256dh,
+            Auth = body.Auth,
+            CreatedUtc = timeProvider.GetUtcNow(),
+        });
+    }
+
+    await context.SaveChangesAsync(cancellationToken);
+    return Results.NoContent();
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+
+// [FromBody] is required rather than inferred: minimal APIs refuse to infer a body on DELETE.
+app.MapDelete("/api/push/subscribe", async (
+    [FromBody] UnsubscribeRequest body,
+    WhosHomeContext context,
+    CancellationToken cancellationToken) =>
+{
+    if (!string.IsNullOrWhiteSpace(body.Endpoint))
+    {
+        await context.Subscriptions
+            .Where(subscription => subscription.Endpoint == body.Endpoint)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    return Results.NoContent();
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+
+// Who this person hears about. Returns everyone with their current setting so the UI can render
+// a row per person without having to know the default rule.
+app.MapGet("/api/notifications", async (
+    ClaimsPrincipal user,
+    WhosHomeContext context,
+    CancellationToken cancellationToken) =>
+{
+    int personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    Dictionary<int, bool> preferences = await context.NotificationPreferences
+        .AsNoTracking()
+        .Where(preference => preference.SubscriberPersonId == personId)
+        .ToDictionaryAsync(
+            preference => preference.SubjectPersonId,
+            preference => preference.Enabled,
+            cancellationToken);
+
+    List<Person> people = await context.People
+        .AsNoTracking()
+        .OrderBy(person => person.Name)
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(people.Select(person => new
+    {
+        personId = person.Id,
+        name = person.Name,
+        isSelf = person.Id == personId,
+        enabled = preferences.TryGetValue(person.Id, out bool enabled)
+            ? enabled
+            : person.Id != personId,
+    }));
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+
+app.MapPut("/api/notifications/{subjectId:int}", async (
+    int subjectId,
+    ClaimsPrincipal user,
+    NotificationPreferenceRequest body,
+    WhosHomeContext context,
+    CancellationToken cancellationToken) =>
+{
+    int personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    if (!await context.People.AnyAsync(person => person.Id == subjectId, cancellationToken))
+    {
+        return Results.NotFound();
+    }
+
+    NotificationPreference? preference = await context.NotificationPreferences
+        .FirstOrDefaultAsync(
+            candidate => candidate.SubscriberPersonId == personId && candidate.SubjectPersonId == subjectId,
+            cancellationToken);
+
+    if (preference is null)
+    {
+        context.NotificationPreferences.Add(new NotificationPreference
+        {
+            SubscriberPersonId = personId,
+            SubjectPersonId = subjectId,
+            Enabled = body.Enabled,
+        });
+    }
+    else
+    {
+        preference.Enabled = body.Enabled;
+    }
+
+    await context.SaveChangesAsync(cancellationToken);
+    return Results.NoContent();
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
 
 // ---- Member sessions ----
 
@@ -544,3 +704,9 @@ public record CreatePersonRequest(string Name);
 public record SignInRequest(string? Code);
 
 public record AdminSignInRequest(string? Token);
+
+public record SubscribeRequest(string? Endpoint, string? P256dh, string? Auth);
+
+public record UnsubscribeRequest(string? Endpoint);
+
+public record NotificationPreferenceRequest(bool Enabled);

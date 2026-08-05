@@ -23,6 +23,14 @@ export interface Session {
   name: string
 }
 
+/** Whether this person hears about that person. Defaults to on for everyone but yourself. */
+export interface NotificationPreference {
+  personId: number
+  name: string
+  isSelf: boolean
+  enabled: boolean
+}
+
 export interface PersonSummary {
   id: number
   name: string

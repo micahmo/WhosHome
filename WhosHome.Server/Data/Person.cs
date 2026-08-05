@@ -36,5 +36,11 @@ public class Person
 
     public DateTimeOffset? SetupTokenExpiresUtc { get; set; }
 
+    /// <summary>The state at the previous report, kept so arrivals can be detected as a change
+    /// rather than re-notified on every report while someone sits at home.</summary>
+    public Presence.PresenceState LastState { get; set; } = Presence.PresenceState.Unknown;
+
     public List<PositionReport> Reports { get; set; } = [];
+
+    public List<DeviceSubscription> Subscriptions { get; set; } = [];
 }

@@ -5,6 +5,7 @@
   import Board from './Board.svelte'
   import Login from './Login.svelte'
   import InstallPrompt from './InstallPrompt.svelte'
+  import NotifyToggle from './NotifyToggle.svelte'
 
   const refreshIntervalMs = 30_000
 
@@ -58,7 +59,9 @@
         admin = false
         return
       }
-      error = 'Could not reach the server.'
+      // Distinguish "you have no signal" from "the server is unreachable", because they call for
+      // different reactions and looking identical is what makes an app feel broken.
+      error = navigator.onLine ? 'Could not reach the server.' : 'Offline'
     }
   }
 
@@ -102,6 +105,10 @@
     {/if}
 
     <Board {people} />
+
+    {#if session}
+      <NotifyToggle />
+    {/if}
   {/if}
 </main>
 

@@ -1,4 +1,11 @@
-import type { PersonSummary, PresenceView, Session, SetupInfo, SetupLink } from './types'
+import type {
+  NotificationPreference,
+  PersonSummary,
+  PresenceView,
+  Session,
+  SetupInfo,
+  SetupLink,
+} from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -100,6 +107,37 @@ export function getPresence(): Promise<PresenceView[]> {
 
 export function getSetup(token: string): Promise<SetupInfo> {
   return request<SetupInfo>(`/api/setup/${encodeURIComponent(token)}`)
+}
+
+// ---- Notifications ----
+
+export async function getPushKey(): Promise<string> {
+  return (await request<{ publicKey: string }>('/api/push/key')).publicKey
+}
+
+export function subscribeToPush(endpoint: string, p256dh: string, auth: string): Promise<void> {
+  return request<void>('/api/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint, p256dh, auth }),
+  })
+}
+
+export function unsubscribeFromPush(endpoint: string): Promise<void> {
+  return request<void>('/api/push/subscribe', {
+    method: 'DELETE',
+    body: JSON.stringify({ endpoint }),
+  })
+}
+
+export function getNotificationPreferences(): Promise<NotificationPreference[]> {
+  return request<NotificationPreference[]>('/api/notifications')
+}
+
+export function setNotificationPreference(personId: number, enabled: boolean): Promise<void> {
+  return request<void>(`/api/notifications/${personId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
 }
 
 async function orNullOn401<T>(call: () => Promise<T>): Promise<T | null> {

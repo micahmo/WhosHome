@@ -16,7 +16,7 @@ public class PresenceService(
     /// Records a report, computing and storing the distance. The raw fix overwrites the one on
     /// the person rather than being appended anywhere, so nothing accumulates.
     /// </summary>
-    public async Task<double> RecordAsync(
+    public async Task<RecordedReport> RecordAsync(
         Person person,
         double latitude,
         double longitude,
@@ -33,8 +33,12 @@ public class PresenceService(
             _options.HomeLatitude,
             _options.HomeLongitude);
 
+        PresenceState previousState = person.LastState;
+        PresenceState currentState = Classify(distanceMeters);
+
         person.LastLatitude = latitude;
         person.LastLongitude = longitude;
+        person.LastState = currentState;
 
         PositionReport report = new()
         {
@@ -49,7 +53,7 @@ public class PresenceService(
         context.Reports.Add(report);
         await context.SaveChangesAsync(cancellationToken);
 
-        return distanceMeters;
+        return new RecordedReport(distanceMeters, previousState, currentState);
     }
 
     public async Task<IReadOnlyList<PresenceView>> GetPresenceAsync(CancellationToken cancellationToken)
