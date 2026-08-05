@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ApiError, getPresence, getSession, signOut } from './api'
+  import { ApiError, getPresence, getSession, isAdmin, signOut } from './api'
   import type { PresenceView, Session } from './types'
   import Board from './Board.svelte'
   import Login from './Login.svelte'
@@ -9,9 +9,14 @@
   const refreshIntervalMs = 30_000
 
   let session = $state<Session | null>(null)
+  let admin = $state(false)
   let people = $state<PresenceView[]>([])
   let starting = $state(true)
   let error = $state('')
+
+  // Admins can read the board without being a person, so the machine used for provisioning
+  // does not have to register itself as a household member just to look.
+  let canView = $derived(session !== null || admin)
 
   onMount(() => {
     void start()
@@ -30,6 +35,9 @@
   async function start() {
     try {
       session = await getSession()
+      if (!session) {
+        admin = await isAdmin()
+      }
       await refresh()
     } finally {
       starting = false
@@ -37,7 +45,7 @@
   }
 
   async function refresh() {
-    if (!session) {
+    if (!canView) {
       return
     }
 
@@ -47,6 +55,7 @@
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
         session = null
+        admin = false
         return
       }
       error = 'Could not reach the server.'
@@ -68,15 +77,25 @@
 <main>
   {#if starting}
     <p class="muted">Loading...</p>
-  {:else if !session}
+  {:else if !canView}
     <Login {onSignedIn} />
   {:else}
-    <InstallPrompt />
+    {#if session}
+      <InstallPrompt />
+    {/if}
 
     <header>
       <h1>Who's Home</h1>
-      <button class="link" onclick={leave}>Sign out</button>
+      {#if session}
+        <button class="link" onclick={leave}>Sign out</button>
+      {:else}
+        <a class="link" href="/admin">Admin</a>
+      {/if}
     </header>
+
+    {#if !session}
+      <p class="muted small">Viewing as admin. This browser is not on the board.</p>
+    {/if}
 
     {#if error}
       <p class="error" role="alert">{error}</p>
@@ -114,10 +133,16 @@
     color: var(--muted);
     font-size: 0.85rem;
     padding: 0;
+    text-decoration: none;
   }
 
   .muted {
     color: var(--muted);
+  }
+
+  .small {
+    font-size: 0.8rem;
+    margin: 0 0 0.5rem;
   }
 
   .error {

@@ -247,11 +247,23 @@ app.MapDelete("/api/admin/session", async (HttpContext httpContext) =>
 
 // ---- The board ----
 
-app.MapGet("/api/presence", async (PresenceService presence, CancellationToken cancellationToken) =>
+// Readable by members and by admins. Withholding a read-only board from an admin prevents
+// nothing, since an admin can mint a sign-in code for any person and become them in seconds.
+app.MapGet("/api/presence", async (
+    HttpContext httpContext,
+    PresenceService presence,
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
 {
+    AuthenticateResult member = await httpContext.AuthenticateAsync(AuthSchemes.Member);
+    if (!member.Succeeded && !await AdminAccess.IsAdminAsync(httpContext, options.Value))
+    {
+        return Results.Unauthorized();
+    }
+
     IReadOnlyList<PresenceView> views = await presence.GetPresenceAsync(cancellationToken);
     return Results.Ok(views);
-}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+});
 
 // ---- Household management, admin only ----
 
