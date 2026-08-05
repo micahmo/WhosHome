@@ -1,10 +1,14 @@
 /*
- * Dark only, deliberately, rather than following the system.
+ * Dark only, rather than following the system theme.
  *
- * Android gives web apps no control over status bar icon colour: Chrome infers it from
- * theme-color, Firefox does not. So a light page forces a choice between a dark bar above white
- * content or white icons on a white bar, which hides the clock entirely. Committing to dark makes
- * the bar match the app and sidesteps the whole problem.
+ * The web platform has no API for status bar icon colour. An installed app can only set the bar's
+ * background through theme-color, and browsers differ on what they infer from it: Chrome picks
+ * icon contrast to match, Firefox does not. So on Firefox for Android a light theme-color leaves
+ * white icons on a white bar and the clock disappears. (Native Android apps have
+ * windowLightStatusBar for this; web apps do not. iOS offers only the fixed styles in
+ * apple-mobile-web-app-status-bar-style.)
+ *
+ * Committing to dark makes the bar match the app and removes the choice entirely.
  */
 :root {
   --bg: #121214;

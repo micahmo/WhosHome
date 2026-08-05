@@ -364,6 +364,10 @@ app.MapPost("/api/session", async (
     }
 
     // Single use. A code that stays valid after being used is a code that gets shared.
+    //
+    // Codes are typed rather than delivered as a magic link on purpose. An installed iOS web app
+    // gets a storage container separate from Safari, so a link tapped in Mail would authenticate
+    // the browser and leave the home screen icon signed out, with the code already spent.
     person.LoginCode = null;
     person.LoginCodeExpiresUtc = null;
     await context.SaveChangesAsync(cancellationToken);
