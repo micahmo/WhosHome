@@ -179,7 +179,11 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     if (report!.IsHeartbeat)
     {
         await presence.RecordHeartbeatAsync(person, cancellationToken);
-        logger.LogDebug("Heartbeat from {Name}.", person.Name);
+
+        // Logged at information alongside positions, not at debug. Whether heartbeats arrive is
+        // the one thing that cannot be reconstructed afterwards: they write no report row, and
+        // the next position overwrites the contact time that would have shown one landed.
+        logger.LogInformation("Heartbeat from {Name}.", person.Name);
         return Results.Ok();
     }
 
