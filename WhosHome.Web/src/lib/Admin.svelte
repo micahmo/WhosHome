@@ -26,6 +26,17 @@
 
   let copied = $state<number | null>(null)
 
+  // Hidden until asked for. A live link is a credential: it carries the sign-in code and the
+  // device id, and for someone already onboarded it is only on screen to be shoulder-surfed.
+  // Freshly minted ones open on their own, because minting one means you are about to send it.
+  let shownLinks = $state<number[]>([])
+
+  function toggleLink(person: PersonSummary) {
+    shownLinks = shownLinks.includes(person.id)
+      ? shownLinks.filter((id) => id !== person.id)
+      : [...shownLinks, person.id]
+  }
+
   let list = $state<HTMLUListElement | null>(null)
   let draggingId = $state<number | null>(null)
   let orderBeforeDrag: number[] = []
@@ -185,6 +196,7 @@
       newName = ''
       // Adding someone is only ever a prelude to onboarding them, so skip a click.
       await createSetupLink(person.id)
+      shownLinks = [...shownLinks, person.id]
       people = await listPeople()
     } catch {
       error = 'Could not add that person.'
@@ -206,6 +218,9 @@
     error = ''
     try {
       await createSetupLink(person.id)
+      if (!shownLinks.includes(person.id)) {
+        shownLinks = [...shownLinks, person.id]
+      }
       people = await listPeople()
     } catch {
       error = 'Could not create a setup link.'
@@ -303,14 +318,23 @@
             </button>
             <span class="name">{person.name}</span>
             <span class="actions">
-              <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
-                {person.setupUrl ? 'New link' : 'Setup link'}
-              </button>
+              <!-- Two buttons, never three: a third does not fit beside a name on a phone. When a
+                   link exists the row toggles it, and replacing it lives inside the open box next
+                   to the link it would invalidate. -->
+              {#if person.setupUrl}
+                <button class="secondary" onclick={() => toggleLink(person)}>
+                  {shownLinks.includes(person.id) ? 'Hide link' : 'Show link'}
+                </button>
+              {:else}
+                <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
+                  Setup link
+                </button>
+              {/if}
               <button class="danger" onclick={() => remove(person)} disabled={busy}>Remove</button>
             </span>
           </div>
 
-          {#if person.setupUrl}
+          {#if person.setupUrl && shownLinks.includes(person.id)}
             {@const invite = inviteText(person.setupUrl)}
             <div class="link-box">
               <p class="muted small">
@@ -329,6 +353,10 @@
                   {copied === person.id ? 'Copied' : 'Copy'}
                 </button>
               </div>
+
+              <button class="replace" onclick={() => newLink(person)} disabled={busy}>
+                Replace with a new link
+              </button>
             </div>
           {/if}
         </li>
@@ -415,8 +443,20 @@
     min-width: 5.75rem;
   }
 
+  /* Sized for the longest label so toggling between "Show link" and "Hide link" does not resize
+     the button and shuffle the row. */
   .actions button.secondary {
     min-width: 7.5rem;
+  }
+
+  .replace {
+    margin-top: 0.6rem;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4rem 0.7rem;
   }
 
   button.danger {
