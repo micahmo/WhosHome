@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Container>
-    <TemplateURL>https://raw.githubusercontent.com/micahmo/docker-templates/master/micahmo/whoshome.xml</TemplateURL>
+    <TemplateURL>https://raw.githubusercontent.com/micahmo/WhosHome/main/unraid/whoshome.xml</TemplateURL>
     <Name>WhosHome</Name>
     <Project>https://github.com/micahmo/WhosHome</Project>
     <Overview>A household presence board. Shows who is home, who is near home, and who is away, without showing anyone's actual location. Household members install Traccar Client, which reports over the OsmAnd protocol; the viewer is a web app that installs to the home screen.</Overview>
