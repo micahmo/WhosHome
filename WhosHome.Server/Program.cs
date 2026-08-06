@@ -152,6 +152,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     WhosHomeContext context,
     PresenceService presence,
     PresenceNotifier notifier,
+    IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     ILogger<Program> logger,
     CancellationToken cancellationToken) =>
@@ -187,6 +188,21 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         return Results.Ok();
     }
 
+    // A fix too imprecise to place anyone is worth exactly what a heartbeat is worth, and is
+    // treated as one. A phone waking indoors answers with a cell-tower estimate accurate to a
+    // kilometre or worse; believing it announces arrivals and departures that never happened.
+    WhosHomeOptions ingestOptions = options.Value;
+    if (report.AccuracyMeters > ingestOptions.MaxAccuracyMeters)
+    {
+        await presence.RecordHeartbeatAsync(person, cancellationToken);
+        logger.LogInformation(
+            "Ignored an imprecise fix from {Name}: accurate to {Accuracy:F0} m against a {Limit:F0} m limit.",
+            person.Name,
+            report.AccuracyMeters,
+            ingestOptions.MaxAccuracyMeters);
+        return Results.Ok();
+    }
+
     RecordedReport recorded = await presence.RecordAsync(
         person,
         report.Latitude!.Value,
@@ -194,6 +210,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         report.Timestamp,
         report.AccuracyMeters,
         report.BatteryPercent,
+        report.SpeedMetersPerSecond,
         cancellationToken);
 
     logger.LogInformation(

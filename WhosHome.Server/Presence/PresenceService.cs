@@ -25,6 +25,7 @@ public class PresenceService(
         DateTimeOffset reportedUtc,
         double? accuracyMeters,
         double? batteryPercent,
+        double? speedMetersPerSecond,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(person);
@@ -45,7 +46,7 @@ public class PresenceService(
             ? null
             : GeoMath.DistanceMeters(latitude, longitude, person.LastLatitude.Value, person.LastLongitude.Value);
 
-        bool isMoving = movedMeters > _options.MovementThresholdMeters;
+        bool isMoving = IsMoving(speedMetersPerSecond, movedMeters);
         if (isMoving || person.StationarySinceUtc is null)
         {
             // Moving restarts the clock; a first report starts it.
@@ -71,6 +72,7 @@ public class PresenceService(
             DistanceMeters = distanceMeters,
             TravelSeconds = route?.Seconds,
             MovedMeters = movedMeters,
+            SpeedMetersPerSecond = speedMetersPerSecond,
             AccuracyMeters = accuracyMeters,
             BatteryPercent = batteryPercent,
         };
@@ -147,7 +149,7 @@ public class PresenceService(
         // phone heartbeats without sending a position, so measuring from the last report would call
         // someone stale for the ordinary act of sitting still.
         TimeSpan age = now - (person.LastSeenUtc ?? latest.ReceivedUtc);
-        bool isMoving = latest.MovedMeters > _options.MovementThresholdMeters;
+        bool isMoving = IsMoving(latest.SpeedMetersPerSecond, latest.MovedMeters);
 
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside.
@@ -170,6 +172,22 @@ public class PresenceService(
             IsStale = age > _options.StaleAfter,
             BatteryPercent = latest.BatteryPercent,
         };
+    }
+
+    /// <summary>
+    /// Speed decides this whenever the device reported one, because distance between fixes does not:
+    /// a car reporting every five seconds moves under a hundred metres per fix, which is less than
+    /// the noise floor a stationary phone can produce over five minutes. Distance is only the
+    /// fallback for platforms that send no speed at all.
+    /// </summary>
+    private bool IsMoving(double? speedMetersPerSecond, double? movedMeters)
+    {
+        if (speedMetersPerSecond is not null)
+        {
+            return speedMetersPerSecond > _options.MovingSpeedMetersPerSecond;
+        }
+
+        return movedMeters > _options.MovementThresholdMeters;
     }
 
     private PresenceState Classify(double distanceMeters)

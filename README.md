@@ -30,10 +30,21 @@ as stale only once the heartbeats stop too. At that point something is genuinely
 switched off, an app update, or a reboot it did not survive. A stale card stays at full
 brightness and says so in words. Dimming it reads as though the person has been disabled.
 
-Each card also shows how long that person has been in one spot. Movement is measured against the
-previous fix rather than against home, so driving in a circle still counts as moving, and
-`MovementThresholdMeters` sits above the GPS noise floor so a stationary phone does not appear to
-wander. Time in one place is suppressed while moving, and while stale.
+Each card also shows how long that person has been in one spot, suppressed while they are moving
+and while they are stale.
+
+Moving is decided by the speed the device reports, not by the distance between fixes. Distance
+cannot tell the two cases apart, because the sampling interval varies by orders of magnitude: a car
+reporting every five seconds moves about eighty metres per fix, which is less than the hundred
+metres a phone sitting on a table can appear to wander over five minutes. Speed separates them
+cleanly, roughly 16 m/s against 0.3 m/s. `MovementThresholdMeters` remains the fallback for devices
+that report no speed at all.
+
+A fix is only believed when its reported accuracy is better than `MaxAccuracyMeters`. A phone waking
+indoors answers with a cell-tower estimate accurate to a kilometre or worse, and a fix that cannot
+resolve `HomeRadiusMeters` must not be allowed to decide whether someone is home: doing so announced
+a household member leaving and arriving, one second apart, at half past two in the morning. Such a
+fix is recorded as contact and nothing else, exactly like a heartbeat.
 
 The UI is dark only, and does not follow the system theme.
 
@@ -96,8 +107,10 @@ Adding them to `appsettings.json` would silently override the values below.
 | --- | --- | --- |
 | `HomeLatitude` / `HomeLongitude` | unset | Required. Everything is measured from here |
 | `HomeRadiusMeters` | 150 | Below about 150 m this flaps, since the client's distance filter is 75 m |
-| `NearbyRadiusMeters` | 8047 | Five miles. Also the ring that triggers a "getting close" notification |
-| `MovementThresholdMeters` | 200 | Above the roughly 100 m GPS noise floor, so a parked phone reads as still |
+| `NearbyRadiusMeters` | 3219 | Two miles. Also the ring that triggers a "getting close" notification |
+| `MaxAccuracyMeters` | 250 | Fixes vaguer than this are treated as proof of life only |
+| `MovingSpeedMetersPerSecond` | 1.5 | Above walking pace reads as on the move |
+| `MovementThresholdMeters` | 200 | Fallback for devices that report no speed, and what counts as relocating |
 | `StaleAfter` | 45 min | No contact of any kind for this long is flagged stale; the state is still shown |
 | `HeartbeatInterval` | 15 min | How often a stopped client checks in. Handed to it in the setup link |
 | `ReportRetention` | 30 d | How long derived reports survive |
@@ -180,7 +193,7 @@ sits still:
 
 | Transition | Push |
 | --- | --- |
-| Away to Nearby | "X is nearby" |
+| Away to Nearby | "X is near home" |
 | Nearby or Away to Home | "X is home" |
 | Home to anything | "X left" |
 | Nearby to Away | "X is away" |

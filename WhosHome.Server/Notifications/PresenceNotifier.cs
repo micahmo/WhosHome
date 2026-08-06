@@ -105,7 +105,8 @@ public class PresenceNotifier(
 
         if (current == PresenceState.Nearby)
         {
-            return new Announcement($"{name} is nearby", "Getting close to home.");
+            // "Nearby" would read as near whoever got the notification, wherever they are.
+            return new Announcement($"{name} is near home", "Getting close to home.");
         }
 
         return new Announcement($"{name} is away", "Left the area.");

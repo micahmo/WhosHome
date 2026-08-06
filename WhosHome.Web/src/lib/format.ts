@@ -141,8 +141,10 @@ export function stateLabel(state: PresenceState): string {
   switch (state) {
     case 'Home':
       return 'Home'
+    // "Nearby" on its own reads as near whoever is looking at the board, wherever they happen to
+    // be. Everything here is measured from home, so the label says so.
     case 'Nearby':
-      return 'Nearby'
+      return 'Near home'
     case 'Away':
       return 'Away'
     default:

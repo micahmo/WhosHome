@@ -12,10 +12,23 @@ public class WhosHomeOptions
     /// distance filter is 75 m, so anything below about 150 m will flap.</summary>
     public double HomeRadiusMeters { get; set; } = 150;
 
-    /// <summary>Inside this radius a person reads as nearby rather than away, and crossing into
-    /// it is what triggers a "getting close" notification. Five miles by default, which is far
-    /// enough to be a useful heads up and close enough not to fire on the daily commute.</summary>
-    public double NearbyRadiusMeters { get; set; } = 8047;
+    /// <summary>Inside this radius a person reads as near home rather than away, and crossing into
+    /// it is what triggers a "getting close" notification. Two miles by default. Five was the
+    /// original choice and proved too generous: you can drive a long way through it before the
+    /// board admits you have gone anywhere.</summary>
+    public double NearbyRadiusMeters { get; set; } = 3219;
+
+    /// <summary>Worst reported accuracy a fix may have and still be believed. A phone waking up
+    /// indoors answers with a cell-tower estimate accurate to a kilometre or more, which cannot
+    /// tell <see cref="HomeRadiusMeters"/> from the next town and has announced people leaving and
+    /// arriving in the small hours. Anything worse than this counts only as proof of life.</summary>
+    public double MaxAccuracyMeters { get; set; } = 250;
+
+    /// <summary>Above this speed someone reads as on the move. Compared against the speed the
+    /// device reports, not against the gap between fixes: while driving, reports arrive seconds
+    /// apart, so each step is shorter than <see cref="MovementThresholdMeters"/> and distance alone
+    /// calls a moving car parked. Roughly walking pace, well clear of a stationary phone's noise.</summary>
+    public double MovingSpeedMetersPerSecond { get; set; } = 1.5;
 
     /// <summary>How long without any contact before someone reads as stale. Contact includes
     /// heartbeats, so this measures "the phone has stopped talking to us" rather than "the person

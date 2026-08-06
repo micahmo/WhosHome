@@ -13,7 +13,8 @@ public sealed record OsmAndReport(
     double? Longitude,
     DateTimeOffset Timestamp,
     double? AccuracyMeters,
-    double? BatteryPercent)
+    double? BatteryPercent,
+    double? SpeedMetersPerSecond)
 {
     /// <summary>
     /// A report with no coordinates means the device is alive but has not moved. Accepting these
@@ -28,6 +29,8 @@ public static class OsmAndParser
     /// <summary>Below this a numeric timestamp is seconds, above it milliseconds.
     /// Year 5138 in seconds, which is comfortably past the point where this matters.</summary>
     private const long MillisecondThreshold = 100_000_000_000L;
+
+    private const double MetersPerSecondPerKnot = 0.514444;
 
     public static bool TryParse(
         IReadOnlyDictionary<string, string?> values,
@@ -66,13 +69,19 @@ public static class OsmAndParser
         double? accuracy = TryGetDouble(values, "accuracy", out double accuracyValue) ? accuracyValue : null;
         double? battery = TryGetDouble(values, "batt", out double batteryValue) ? batteryValue : null;
 
+        // The protocol carries speed in knots, which is the one unit nothing else here uses.
+        double? speed = TryGetDouble(values, "speed", out double speedValue)
+            ? speedValue * MetersPerSecondPerKnot
+            : null;
+
         report = new OsmAndReport(
             deviceId,
             hasLatitude ? latitude : null,
             hasLongitude ? longitude : null,
             timestamp,
             accuracy,
-            battery);
+            battery,
+            speed);
         error = null;
         return true;
     }

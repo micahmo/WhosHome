@@ -31,6 +31,11 @@ public class PositionReport
     /// nothing to compare against. Used to tell moving from parked.</summary>
     public double? MovedMeters { get; set; }
 
+    /// <summary>Speed the device reported, in metres per second. Preferred over
+    /// <see cref="MovedMeters"/> for telling moving from parked, because it does not depend on how
+    /// far apart in time two fixes happen to be. Null when the platform did not supply one.</summary>
+    public double? SpeedMetersPerSecond { get; set; }
+
     public double? AccuracyMeters { get; set; }
 
     public double? BatteryPercent { get; set; }
