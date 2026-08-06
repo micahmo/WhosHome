@@ -63,8 +63,9 @@ export function signOut(): Promise<void> {
 
 // ---- Admin mode ----
 
+/** Always answers, so not being an admin is a false rather than a 401. */
 export async function isAdmin(): Promise<boolean> {
-  return (await orNullOn401(() => request<{ admin: boolean }>('/api/admin/session'))) !== null
+  return (await request<{ admin: boolean }>('/api/admin/session')).admin
 }
 
 export function adminSignIn(token: string): Promise<void> {

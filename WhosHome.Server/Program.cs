@@ -447,10 +447,13 @@ app.MapPost("/api/admin/session", async (
     return Results.Ok(new { admin = true });
 }).RequireRateLimiting(SignInPolicy);
 
+// A question, not a protected resource, so "no" is a 200 rather than a 401. Anyone may ask whether
+// this browser is an admin, and answering with 401 put a failure in everyone's network log for the
+// ordinary case of not being one. The endpoints that actually do anything still refuse.
 app.MapGet("/api/admin/session", async (HttpContext httpContext, IOptions<WhosHomeOptions> options) =>
 {
     bool admin = await AdminAccess.IsAdminAsync(httpContext, options.Value);
-    return admin ? Results.Ok(new { admin = true }) : Results.Unauthorized();
+    return Results.Ok(new { admin });
 });
 
 app.MapDelete("/api/admin/session", async (HttpContext httpContext) =>
