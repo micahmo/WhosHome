@@ -297,7 +297,8 @@ app.MapGet("/api/notifications", async (
 
     List<Person> people = await context.People
         .AsNoTracking()
-        .OrderBy(person => person.Id)
+        .OrderBy(person => person.SortOrder)
+        .ThenBy(person => person.Id)
         .ToListAsync(cancellationToken);
 
     return Results.Ok(people.Select(person => new
@@ -497,7 +498,8 @@ app.MapGet("/api/people", async (
 
     List<Person> people = await context.People
         .AsNoTracking()
-        .OrderBy(person => person.Id)
+        .OrderBy(person => person.SortOrder)
+        .ThenBy(person => person.Id)
         .ToListAsync(cancellationToken);
 
     // The live setup link comes back with each person so the admin page can show it again after
@@ -539,17 +541,58 @@ app.MapPost("/api/people", async (
         return Results.BadRequest(new { error = "Name is required." });
     }
 
+    // Appended, not inserted. Someone added while you are looking at the list should turn up at
+    // the bottom where you are already looking, rather than jumping into the middle.
+    int lastPosition = await context.People
+        .Select(existing => (int?)existing.SortOrder)
+        .MaxAsync(cancellationToken) ?? -1;
+
     Person person = new()
     {
         Name = body.Name.Trim(),
         DeviceId = GenerateDeviceId(),
         CreatedUtc = timeProvider.GetUtcNow(),
+        SortOrder = lastPosition + 1,
     };
 
     context.People.Add(person);
     await context.SaveChangesAsync(cancellationToken);
 
     return Results.Created($"/api/people/{person.Id}", new { person.Id, person.Name, person.DeviceId });
+});
+
+app.MapPut("/api/people/order", async (
+    HttpContext httpContext,
+    ReorderPeopleRequest body,
+    WhosHomeContext context,
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    if (!await AdminAccess.IsAdminAsync(httpContext, options.Value))
+    {
+        return Results.Unauthorized();
+    }
+
+    List<Person> people = await context.People.ToListAsync(cancellationToken);
+
+    // The whole order arrives at once, so reject anything that is not a permutation of the
+    // household. A partial list would silently leave the people it omits sharing positions with
+    // the ones it names, and the result would depend on the Id tiebreak rather than on intent.
+    int[] requested = body.Ids ?? [];
+    if (requested.Length != people.Count || requested.Distinct().Count() != requested.Length
+        || !requested.OrderBy(id => id).SequenceEqual(people.Select(person => person.Id).OrderBy(id => id)))
+    {
+        return Results.BadRequest(new { error = "The order must list every person exactly once." });
+    }
+
+    for (int position = 0; position < requested.Length; position++)
+    {
+        people.Single(person => person.Id == requested[position]).SortOrder = position;
+    }
+
+    await context.SaveChangesAsync(cancellationToken);
+
+    return Results.NoContent();
 });
 
 app.MapDelete("/api/people/{id:int}", async (
@@ -758,6 +801,9 @@ static async Task<IReadOnlyDictionary<string, string?>> ReadValuesAsync(HttpRequ
 }
 
 public record CreatePersonRequest(string Name);
+
+/// <summary>Every person's id, in the order they should appear.</summary>
+public record ReorderPeopleRequest(int[]? Ids);
 
 public record SignInRequest(string? Code);
 

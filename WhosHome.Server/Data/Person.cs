@@ -14,6 +14,11 @@ public class Person
 
     public DateTimeOffset CreatedUtc { get; set; }
 
+    /// <summary>Where this person sits on the board and in the admin list. Seeded from the order
+    /// people were added, and rewritten wholesale when the admin drags a row, so it is a position
+    /// rather than a rank: the values only mean anything relative to each other.</summary>
+    public int SortOrder { get; set; }
+
     /// <summary>
     /// The most recent raw fix, overwritten on every report. This is the only place raw
     /// coordinates exist, so the database cannot accumulate a location history no matter how

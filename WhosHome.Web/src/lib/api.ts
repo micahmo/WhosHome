@@ -99,6 +99,14 @@ export function removePerson(personId: number): Promise<void> {
   return request<void>(`/api/people/${personId}`, { method: 'DELETE' })
 }
 
+/** Every person's id, in the order they should appear. The server rejects a partial list. */
+export function reorderPeople(ids: number[]): Promise<void> {
+  return request<void>('/api/people/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids }),
+  })
+}
+
 // ---- The board, and the setup page ----
 
 export function getPresence(): Promise<PresenceView[]> {

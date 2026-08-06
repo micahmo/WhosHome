@@ -8,6 +8,7 @@
     isAdmin,
     listPeople,
     removePerson,
+    reorderPeople,
   } from './api'
   import type { PersonSummary } from './types'
 
@@ -24,6 +25,113 @@
   let newName = $state('')
 
   let copied = $state<number | null>(null)
+
+  let list = $state<HTMLUListElement | null>(null)
+  let draggingId = $state<number | null>(null)
+  let orderBeforeDrag: number[] = []
+
+  /**
+   * Where the dragged row belongs, judged against the midpoints of the *other* rows rather than
+   * its own. Measuring against its own midpoint oscillates: once it lands under the pointer, the
+   * pointer is inside it, and it immediately reads as belonging one slot further on. Rows here
+   * vary in height, since an open setup link makes one much taller, so this cannot assume a
+   * uniform row and step by height.
+   */
+  function targetIndex(clientY: number, fromIndex: number): number {
+    if (!list) {
+      return fromIndex
+    }
+
+    const rows = Array.from(list.children) as HTMLElement[]
+    let target = fromIndex
+
+    for (let index = 0; index < rows.length; index += 1) {
+      if (index === fromIndex) {
+        continue
+      }
+
+      const rect = rows[index].getBoundingClientRect()
+      const midpoint = rect.top + rect.height / 2
+      if (index < fromIndex && clientY < midpoint) {
+        target = Math.min(target, index)
+      }
+      if (index > fromIndex && clientY > midpoint) {
+        target = Math.max(target, index)
+      }
+    }
+
+    return target
+  }
+
+  function move(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) {
+      return
+    }
+
+    const next = [...people]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    people = next
+  }
+
+  function startDrag(person: PersonSummary, event: PointerEvent) {
+    // Pointer events rather than the HTML5 drag API, which never fires on touch. Capturing means
+    // the drag survives the pointer leaving the handle, which it does immediately.
+    event.preventDefault()
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+    draggingId = person.id
+    orderBeforeDrag = people.map((candidate) => candidate.id)
+  }
+
+  function onDragMove(event: PointerEvent) {
+    if (draggingId === null) {
+      return
+    }
+
+    const fromIndex = people.findIndex((candidate) => candidate.id === draggingId)
+    move(fromIndex, targetIndex(event.clientY, fromIndex))
+  }
+
+  async function endDrag() {
+    if (draggingId === null) {
+      return
+    }
+
+    draggingId = null
+    await commitOrder()
+  }
+
+  async function commitOrder() {
+    const ids = people.map((person) => person.id)
+    if (ids.join() === orderBeforeDrag.join()) {
+      return
+    }
+
+    try {
+      await reorderPeople(ids)
+    } catch {
+      error = 'Could not save the new order.'
+      people = await listPeople()
+    }
+  }
+
+  /** Arrow keys on the handle, so reordering does not require a pointer at all. */
+  async function nudge(person: PersonSummary, event: KeyboardEvent) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+      return
+    }
+
+    event.preventDefault()
+    const fromIndex = people.findIndex((candidate) => candidate.id === person.id)
+    const toIndex = fromIndex + (event.key === 'ArrowUp' ? -1 : 1)
+    if (toIndex < 0 || toIndex >= people.length) {
+      return
+    }
+
+    orderBeforeDrag = people.map((candidate) => candidate.id)
+    move(fromIndex, toIndex)
+    await commitOrder()
+  }
 
   /** The setup page explains itself, so the message does not have to. */
   function inviteText(url: string): string {
@@ -171,10 +279,28 @@
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
 
-    <ul>
+    <ul bind:this={list} class:dragging={draggingId !== null}>
       {#each people as person (person.id)}
-        <li>
+        <li class:lifted={draggingId === person.id}>
           <div class="row">
+            <button
+              class="grip"
+              aria-label="Reorder {person.name}"
+              onpointerdown={(event) => startDrag(person, event)}
+              onpointermove={onDragMove}
+              onpointerup={endDrag}
+              onpointercancel={endDrag}
+              onkeydown={(event) => nudge(person, event)}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M6 3h.01M10 3h.01M6 8h.01M10 8h.01M6 13h.01M10 13h.01"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
             <span class="name">{person.name}</span>
             <span class="actions">
               <button class="secondary" onclick={() => newLink(person)} disabled={busy}>
@@ -322,6 +448,22 @@
   li {
     padding: 0.75rem 0;
     border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  /* The row being dragged is raised out of the list so it reads as held rather than as inserted,
+     and opaque so the rows sliding past do not show through it. */
+  li.lifted {
+    background: var(--surface);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.35);
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  /* Text selection during a drag turns the whole list blue on desktop. */
+  ul.dragging {
+    user-select: none;
   }
 
   .row {
@@ -333,6 +475,32 @@
 
   .name {
     font-weight: 600;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* touch-action is the whole trick on a phone: without it the browser claims the gesture as a
+     scroll and no pointermove ever arrives. */
+  .grip {
+    flex-shrink: 0;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0.3rem;
+    background: none;
+    border: none;
+    color: var(--muted);
+    touch-action: none;
+    cursor: grab;
+  }
+
+  li.lifted .grip {
+    cursor: grabbing;
+    color: var(--text);
+  }
+
+  .grip svg {
+    width: 100%;
+    height: 100%;
   }
 
   .link-box {
