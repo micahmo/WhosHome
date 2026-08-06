@@ -27,6 +27,12 @@ public class PositionReport
     /// notifications, so losing it degrades to showing plain distance.</summary>
     public double? TravelSeconds { get; set; }
 
+    /// <summary>Driving distance home, from the same OSRM answer as <see cref="TravelSeconds"/>.
+    /// Closer to how people describe how far away they are than the straight line in
+    /// <see cref="DistanceMeters"/>, but never a substitute for it: state is decided by the straight
+    /// line so that a routing outage cannot move anyone in or out of the house.</summary>
+    public double? TravelMeters { get; set; }
+
     /// <summary>How far this fix is from the previous one. Null on a first report, since there is
     /// nothing to compare against. Used to tell moving from parked.</summary>
     public double? MovedMeters { get; set; }

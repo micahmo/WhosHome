@@ -9,9 +9,12 @@ export interface PresenceView {
   personId: number
   name: string
   state: PresenceState
+  /** Straight-line distance from home, and the only thing `state` comes from. */
   distanceMeters: number | null
   /** Driving time home when routing gave a trustworthy answer. Null is normal. */
   travelSeconds: number | null
+  /** Driving distance home. Shown in preference to `distanceMeters`; null falls back to it. */
+  travelMeters: number | null
   /** The latest fix showed real movement rather than GPS drift. */
   isMoving: boolean
   /** How long they have been in one spot. Null while moving. */

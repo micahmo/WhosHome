@@ -93,6 +93,7 @@ public class PresenceService(
             ReceivedUtc = now,
             DistanceMeters = distanceMeters,
             TravelSeconds = route?.Seconds,
+            TravelMeters = route?.Meters,
             MovedMeters = movedMeters,
             // The effective one, so the board reads the same number this decision was made on.
             SpeedMetersPerSecond = effectiveSpeed,
@@ -183,6 +184,7 @@ public class PresenceService(
             State = Classify(latest.DistanceMeters),
             DistanceMeters = latest.DistanceMeters,
             TravelSeconds = latest.TravelSeconds,
+            TravelMeters = latest.TravelMeters,
             IsMoving = isMoving,
             // Suppressed while moving, and while stale, where it would otherwise claim someone has
             // been standing still for hours when really we just stopped hearing from them.

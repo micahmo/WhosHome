@@ -14,11 +14,18 @@ public sealed record PresenceView
     /// this person has never reported at all, not that their last report is stale.</summary>
     public required PresenceState State { get; init; }
 
+    /// <summary>Straight-line distance from home, and the only thing <see cref="State"/> is derived
+    /// from. Always present, so a card has something to show when routing does not answer.</summary>
     public double? DistanceMeters { get; init; }
 
     /// <summary>Driving time home, when routing produced a trustworthy answer. Null is normal and
     /// simply means the card shows distance without it.</summary>
     public double? TravelSeconds { get; init; }
+
+    /// <summary>Driving distance home, from the same answer as <see cref="TravelSeconds"/>. Preferred
+    /// for display, because "eight miles away" describes the drive rather than the straight line, but
+    /// it decides nothing.</summary>
+    public double? TravelMeters { get; init; }
 
     /// <summary>True when the latest fix showed real movement rather than GPS drift.</summary>
     public required bool IsMoving { get; init; }

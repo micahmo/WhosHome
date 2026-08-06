@@ -31,6 +31,9 @@
     {@const preference = preferenceFor(person.personId)}
     {@const settled = person.stationarySeconds !== null && !person.isStale}
     {@const moving = person.isMoving && !person.isStale}
+    <!-- Driving distance when routing answered, straight line otherwise. Nobody describes how far
+         away they are as the crow flies, and the fallback keeps a number on the card either way. -->
+    {@const shownDistance = person.travelMeters ?? person.distanceMeters}
     {@const dwell =
       formatDwell(person.stationarySeconds) +
       (deservesTimestamp(person.stationarySeconds)
@@ -80,8 +83,8 @@
 
       <p class="state">
         {stateLabel(person.state)}
-        {#if person.state !== 'Home' && person.distanceMeters !== null}
-          <span class="distance">{formatDistance(person.distanceMeters)}</span>
+        {#if person.state !== 'Home' && shownDistance !== null}
+          <span class="distance">{formatDistance(shownDistance)}</span>
         {/if}
         <!-- Only at home do "been home this long" and "been in one spot this long" mean the same
              thing, so only here can the duration hang off the state without misleading. -->
