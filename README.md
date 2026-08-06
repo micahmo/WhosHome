@@ -166,13 +166,15 @@ reasoning behind the parts that are not obvious.
 
 ## Known limitations
 
-**Check-ins do not appear to work on iPhones.** The app asks iOS to run a background task it has not
-declared, and iOS refuses. Combined with the app going quiet when a phone sits still, an iPhone can
-stay silent indefinitely and its card will read as stale. Sending those phones a setup link with
-`stop_detection=false` keeps them reporting, at a cost in battery. Details in the design notes.
+**iPhones cost more battery than Android phones.** The check-in mechanism Traccar uses is broken on
+iOS, so iPhones are configured to keep reporting rather than sleep between check-ins. Without that,
+an iPhone at rest would send nothing at all, and the board could not tell a phone parked at home from
+one that is switched off or out of signal. The setup page detects the platform and configures each
+phone accordingly, so there is nothing to choose.
 
-**Tracking does not resume by itself after a phone reboots**, and an app update can switch it off.
-The board will show the card going stale, but only the person holding the phone can start it again.
+**An app update can switch tracking off** without saying so, and nobody finds out until the card goes
+stale. Whether tracking survives a phone reboot is upstream's open question rather than ours; if it
+does not, the person holding the phone has to start it again.
 
 **Routing only covers the region your OSRM server was built for.** Outside it, cards fall back to
 straight-line distance and drop the travel time rather than showing a wrong number.

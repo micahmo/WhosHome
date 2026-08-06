@@ -718,6 +718,24 @@ app.MapGet("/api/setup/{token}", async (
     }
 
     string ingestUrl = $"{PublicOrigin(httpContext.Request)}/ingest";
+    int checkInSeconds = (int)current.HeartbeatInterval.TotalSeconds;
+
+    // This page is opened on the phone being set up, so the request itself says which platform needs
+    // configuring. Both branches below exist for the same reason: silence has to mean something. A
+    // stationary phone that sends nothing is indistinguishable from one that is switched off, out of
+    // signal, or has had tracking disabled by an app update, and that is exactly the case the board's
+    // staleness warning is for.
+    bool isApple = SetupTargets.IsAppleMobile(httpContext.Request.Headers.UserAgent.ToString());
+
+    string tracking = isApple
+        // Heartbeats do not work on iOS: the client asks BGTaskScheduler for an identifier its own
+        // Info.plist never declared, so the task is refused. Stop detection therefore has to come off,
+        // or an iPhone at rest would say nothing at all. The interval becomes the check-in cadence,
+        // and movement still reports at `distance` regardless, because the client's filters are an OR.
+        ? $"&interval={checkInSeconds}&stop_detection=false"
+        // Android heartbeats do work, observed arriving on schedule, so stop detection stays on and
+        // costs nothing: the phone sleeps between check-ins instead of tracking continuously.
+        : $"&interval=300&heartbeat={checkInSeconds}&stop_detection=true";
 
     return Results.Ok(new
     {
@@ -725,13 +743,10 @@ app.MapGet("/api/setup/{token}", async (
         code = person.LoginCode,
         ingestUrl,
         // Custom scheme, any host except "action", and the parameter names are url/id.
-        // heartbeat is what makes silence meaningful: stop_detection deliberately stops sending
-        // positions while stationary, so without a periodic check-in there is no way to tell a
-        // parked phone from one that has stopped working.
         traccarUrl =
             $"org.traccar.client://configure?url={Uri.EscapeDataString(ingestUrl)}"
-            + $"&id={person.DeviceId}&accuracy=medium&distance=75&interval=300"
-            + $"&heartbeat={(int)current.HeartbeatInterval.TotalSeconds}&stop_detection=true",
+            + $"&id={person.DeviceId}&accuracy=medium&distance=75"
+            + tracking,
         expiresUtc = person.SetupTokenExpiresUtc,
     });
 }).RequireRateLimiting(SignInPolicy);

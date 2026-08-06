@@ -85,8 +85,56 @@ Even if it were declared, `BGAppRefreshTaskRequest.earliestBeginDate` is a floor
 schedule: iOS decides whether to honour it based on usage and battery, and Low Power Mode disables
 background refresh entirely. An interval would be a hope, not a promise.
 
-Combined with stop detection, an iPhone that settles somewhere can go silent indefinitely with nothing
-to break the silence. `stop_detection=false` in the setup link is the workaround.
+So an iPhone that settles somewhere goes quiet and stays quiet, and its card eventually reads "Phone
+not checking in" while its position is perfectly correct. On iPhones the staleness warning is the
+unreliable part, not the location.
+
+That reads like a phone nobody can reach until the app is opened by hand. It is not, for the reason
+below.
+
+### Resuming after a stop, which does work on iOS
+
+Coming out of a stop does not use the broken machinery at all. `RegionDetector` registers a
+`CLCircularRegion` around wherever the phone stopped and monitors it:
+
+```kotlin
+override fun locationManager(manager: CLLocationManager, didExitRegion: CLRegion) {
+    scope.launch { signals.emit(Signal.StationaryExit) }
+}
+allowsBackgroundLocationUpdates = true
+```
+
+Region monitoring is a separate iOS subsystem from `BGTaskScheduler`. Monitored regions persist after
+the app is terminated, iOS relaunches the app in the background to deliver the event, and none of it
+depends on Background App Refresh. `MotionActivityDetector` adds a second signal, watching
+`CMMotionActivity` for a still-exit.
+
+The radius is `stationaryRadiusMeters`, which defaults to **100 m** with a `stopTimeoutSeconds` of 60,
+and is not exposed as a deep-link parameter. So leaving the house wakes it and pottering about the
+garden does not.
+
+The practical consequence is worth being clear about, because it is easy to get backwards: the iOS
+heartbeat bug costs the **liveness signal**, not location freshness. Positions resume on their own once
+someone actually goes somewhere.
+
+### What we do about it
+
+Positions resuming on their own is not enough, and treating the broken warning as cosmetic was a
+mistake worth recording. Silence has to *mean* something. A stationary iPhone that sends nothing looks
+exactly like one that is switched off, out of signal, or has had tracking disabled by an app update,
+and telling those apart is the entire purpose of the staleness warning. Android has that ability
+through heartbeats; leaving iOS without any equivalent gave iPhones a warning that fires when nothing
+is wrong and stays silent when something is.
+
+So iPhones get `stop_detection=false` and keep reporting instead of sleeping. `interval` becomes the
+check-in cadence and is set from `HeartbeatInterval`, so both platforms check in on the same schedule
+by different means. Movement still reports at `distance` regardless, because the client's filters are
+an OR rather than an AND.
+
+The cost is real and one-sided: an iPhone runs its location subsystem continuously where an Android
+phone sleeps between check-ins. That is the price of being able to trust the warning, and it is worth
+paying, because a presence board that cannot distinguish "at home" from "phone is dead" is lying in the
+one case you would actually want to know about.
 
 ## Routing
 
@@ -165,9 +213,21 @@ without a pointer.
 Traccar Client accepts configuration over a custom URL scheme. The parameter names are `url` and `id`,
 not `serverUrl` and `deviceId` as various forum posts claim.
 
+The tail differs by platform, decided from the `User-Agent` of whoever opens the setup page, which is
+the phone being configured:
+
 ```
-org.traccar.client://configure?url=<urlencoded /ingest URL>&id=<deviceId>&accuracy=medium&distance=75&interval=300&heartbeat=900&stop_detection=true
+# Android and everything else: sleep between check-ins
+...&id=<deviceId>&accuracy=medium&distance=75&interval=300&heartbeat=900&stop_detection=true
+
+# iOS: keep reporting, because its check-ins do not work
+...&id=<deviceId>&accuracy=medium&distance=75&interval=900&stop_detection=false
 ```
+
+Sniffing a user agent is normally a poor idea. It is defensible here because the cost of being wrong
+is low and self-correcting: the deep link only functions on the device that opens it, and a fresh link
+fixes a phone that got the wrong one. iPadOS in desktop mode reports itself as a Mac and would be
+misread, which is acceptable for a device unlikely to be anybody's tracker.
 
 Verified against `ConfigurationService.applyUri` and `Preferences` in the current Flutter client, not
 the older native Android one, which has neither `heartbeat` nor `stop_detection`. `heartbeat` is in
