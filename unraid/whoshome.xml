@@ -3,7 +3,7 @@
     <TemplateURL>https://raw.githubusercontent.com/micahmo/docker-templates/master/micahmo/whoshome.xml</TemplateURL>
     <Name>WhosHome</Name>
     <Project>https://github.com/micahmo/WhosHome</Project>
-    <Overview>A household presence board. Shows who is home, who is nearby, and who is away, without showing anyone's actual location. Household members install Traccar Client, which reports over the OsmAnd protocol; the viewer is a web app that installs to the home screen.</Overview>
+    <Overview>A household presence board. Shows who is home, who is near home, and who is away, without showing anyone's actual location. Household members install Traccar Client, which reports over the OsmAnd protocol; the viewer is a web app that installs to the home screen.</Overview>
     <Description>A household presence board. Shows who is home, who is nearby, and who is away, without showing anyone's actual location. Distance is computed on arrival and only the result is stored, so the database never accumulates a location history.</Description>
     <Registry>https://ghcr.io/micahmo/whoshome</Registry>
     <GitHub>https://github.com/micahmo/WhosHome</GitHub>
