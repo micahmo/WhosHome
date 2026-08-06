@@ -66,10 +66,22 @@ installs and configures Traccar Client in one tap, and a button that starts trac
 a server address or type a device id.
 
 Links are good for 24 hours and then disappear on their own. Send a new one whenever you need to;
-the old one stops working.
+the old one stops working. Minting a link never changes anyone's phone credential, so it is safe to
+re-send at any time and their history stays intact.
 
 Treat a live link like a password. It carries the sign-in code and the phone's credential, which is
 why the admin page keeps links hidden until you ask for one.
+
+## Changing someone's phone settings later
+
+Household members do not need a new setup link for this. **My phone** in the board header opens a
+page that applies the current recommended settings to whatever phone is looking at it, and switches
+tracking back on. No code, no link, no admin involved: they are already signed in, and the page only
+ever serves the settings for the person holding that session.
+
+Two things make it worth having. The settings worth recommending change as each platform turns out to
+behave differently, and this is how existing phones catch up. And an app update can switch tracking
+off silently, which otherwise means someone waiting on you to mint them a link.
 
 ## How it works
 

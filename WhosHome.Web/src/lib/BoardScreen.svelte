@@ -153,6 +153,10 @@
     <header>
       <h1>Who's Home</h1>
       <span class="header-links">
+        {#if session}
+          <!-- Only for a member: an admin browsing the board has no phone on it to configure. -->
+          <a class="link" href="/device">My phone</a>
+        {/if}
         {#if admin}
           <a class="link" href="/admin">Admin</a>
         {/if}

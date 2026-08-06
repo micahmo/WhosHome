@@ -1,4 +1,5 @@
 import type {
+  DeviceConfig,
   NotificationPreference,
   PersonSummary,
   PresenceView,
@@ -116,6 +117,11 @@ export function getPresence(): Promise<PresenceView[]> {
 
 export function getSetup(token: string): Promise<SetupInfo> {
   return request<SetupInfo>(`/api/setup/${encodeURIComponent(token)}`)
+}
+
+/** The signed-in member's own phone settings. Always their own; the session decides who that is. */
+export function getDeviceConfig(): Promise<DeviceConfig> {
+  return request<DeviceConfig>('/api/device/config')
 }
 
 // ---- Notifications ----

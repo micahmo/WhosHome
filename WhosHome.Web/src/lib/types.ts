@@ -60,6 +60,21 @@ export interface SetupLink {
   setupUrl: string
 }
 
+/**
+ * What the device page shows a signed-in member about their own phone. No token: the session says
+ * who is asking, and the server only ever answers for that person.
+ */
+export interface DeviceConfig {
+  name: string
+  /** Applies the current recommended settings, computed for the platform making this request. */
+  traccarUrl: string
+  /** Starts tracking. Separate, because applying settings does not start it. */
+  startUrl: string
+  ingestUrl: string
+  /** When their phone last made contact, so the page can show whether any of this took effect. */
+  lastSeenUtc: string | null
+}
+
 /** What the setup page shows someone. Fetched with an unguessable token, not a session. */
 export interface SetupInfo {
   name: string

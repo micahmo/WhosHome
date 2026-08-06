@@ -695,6 +695,49 @@ app.MapPost("/api/people/{id:int}/code", async (
     });
 });
 
+// Lets a household member re-apply the current recommended settings to their own phone, without an
+// admin minting anything. Two things make that worth having: the settings we recommend change as we
+// learn what each platform actually does, and an app update can switch tracking off silently, which
+// otherwise needs an admin to fix. The person comes from the session rather than the request, so
+// there is no shape of this call that returns somebody else's device id.
+app.MapGet("/api/device/config", async (
+    ClaimsPrincipal user,
+    HttpContext httpContext,
+    WhosHomeContext context,
+    IOptions<WhosHomeOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    int personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    Person? person = await context.People
+        .AsNoTracking()
+        .FirstOrDefaultAsync(candidate => candidate.Id == personId, cancellationToken);
+
+    if (person is null)
+    {
+        // The session outlived the person, so it is no longer a session for anybody.
+        await httpContext.SignOutAsync(AuthSchemes.Member);
+        return Results.Unauthorized();
+    }
+
+    string ingestUrl = $"{PublicOrigin(httpContext.Request)}/ingest";
+
+    return Results.Ok(new
+    {
+        name = person.Name,
+        traccarUrl = TraccarConfigLink.Configure(
+            person,
+            options.Value,
+            ingestUrl,
+            httpContext.Request.Headers.UserAgent.ToString()),
+        startUrl = TraccarConfigLink.Start(),
+        ingestUrl,
+        // So the page can show whether the phone is actually being heard from, which is the only
+        // feedback available: nothing here can read what settings the app currently holds.
+        lastSeenUtc = person.LastSeenUtc,
+    });
+}).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+
 // Unauthenticated by necessity: the whole point is that someone can open this before they
 // have a session. The token is long, single-purpose and expires with the code.
 app.MapGet("/api/setup/{token}", async (
@@ -718,35 +761,17 @@ app.MapGet("/api/setup/{token}", async (
     }
 
     string ingestUrl = $"{PublicOrigin(httpContext.Request)}/ingest";
-    int checkInSeconds = (int)current.HeartbeatInterval.TotalSeconds;
 
     // This page is opened on the phone being set up, so the request itself says which platform needs
-    // configuring. Both branches below exist for the same reason: silence has to mean something. A
-    // stationary phone that sends nothing is indistinguishable from one that is switched off, out of
-    // signal, or has had tracking disabled by an app update, and that is exactly the case the board's
-    // staleness warning is for.
-    bool isApple = SetupTargets.IsAppleMobile(httpContext.Request.Headers.UserAgent.ToString());
-
-    string tracking = isApple
-        // Heartbeats do not work on iOS: the client asks BGTaskScheduler for an identifier its own
-        // Info.plist never declared, so the task is refused. Stop detection therefore has to come off,
-        // or an iPhone at rest would say nothing at all. The interval becomes the check-in cadence,
-        // and movement still reports at `distance` regardless, because the client's filters are an OR.
-        ? $"&interval={checkInSeconds}&stop_detection=false"
-        // Android heartbeats do work, observed arriving on schedule, so stop detection stays on and
-        // costs nothing: the phone sleeps between check-ins instead of tracking continuously.
-        : $"&interval=300&heartbeat={checkInSeconds}&stop_detection=true";
+    // configuring.
+    string userAgent = httpContext.Request.Headers.UserAgent.ToString();
 
     return Results.Ok(new
     {
         name = person.Name,
         code = person.LoginCode,
         ingestUrl,
-        // Custom scheme, any host except "action", and the parameter names are url/id.
-        traccarUrl =
-            $"org.traccar.client://configure?url={Uri.EscapeDataString(ingestUrl)}"
-            + $"&id={person.DeviceId}&accuracy=medium&distance=75"
-            + tracking,
+        traccarUrl = TraccarConfigLink.Configure(person, current, ingestUrl, userAgent),
         expiresUtc = person.SetupTokenExpiresUtc,
     });
 }).RequireRateLimiting(SignInPolicy);

@@ -189,6 +189,38 @@ than hidden with CSS.
 There is no way to revoke a link early. Replacing it mints a new one, which invalidates whatever was
 already sent.
 
+Minting a link touches `LoginCode`, `LoginCodeExpiresUtc`, `SetupToken` and `SetupTokenExpiresUtc` and
+nothing else. `DeviceId` is assigned once when a person is created and never reassigned, so re-sending
+a link cannot break a working phone or orphan its history.
+
+## The device page
+
+`/device` lets a signed-in member re-apply the current recommended settings to their own phone, and
+switch tracking back on, without an admin minting anything.
+
+It exists because both of those things otherwise need an admin. The settings worth recommending change
+as each platform turns out to behave differently, and without this the only way to update an existing
+phone is to mint links and chase everybody. Separately, an app update can switch tracking off silently,
+and recovery is the `action/start` deep link, which nobody could reach on their own.
+
+`GET /api/device/config` takes the person from the session claim and accepts no person parameter, so
+there is no shape of the request that returns somebody else's device id. Verified: a query string or
+path segment naming another person is either ignored or 404s, and an admin session without a member
+session gets 401 rather than an arbitrary person's config.
+
+Worth noting for perspective, since this looks like new exposure and is not: `/api/setup/{token}` hands
+the same device id, plus a sign-in code, to anyone holding an unguessable URL with no session at all,
+and that URL gets pasted into messaging apps. A cookie tied to one person is the safer of the two.
+
+Both pages build the link through `TraccarConfigLink.Configure` rather than each assembling their own.
+They must not drift: a phone that took its settings from one page and its updates from the other would
+end up in a state neither page believes it is in. Sharing the builder is the whole guard, since there
+is no test suite in this repo to catch it if they diverge.
+
+The page never claims an update is needed, because nothing here can read the settings the app currently
+holds. It offers to apply them, which is harmless to repeat, and shows when the phone was last heard
+from as the only honest feedback available.
+
 ## Ordering
 
 People appear in the order they were added. `Person.SortOrder` holds the position, seeded from the row
@@ -299,6 +331,7 @@ measured from home.
 | `DELETE` `/api/people/{id}` | admin | Remove someone; their reports cascade |
 | `PUT` `/api/people/order` | admin | Set the display order; takes every id exactly once |
 | `POST` `/api/people/{id}/code` | admin | Mint a sign-in code and setup link |
+| `GET` `/api/device/config` | member | The caller's own phone settings; never anyone else's |
 | `GET` `/api/setup/{token}` | setup token | What the setup page shows someone |
 | `GET` `/api/push/key` | none | Public VAPID key, public by design |
 | `POST`/`DELETE` `/api/push/subscribe` | member | Manage this browser's subscription |
