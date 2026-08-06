@@ -29,11 +29,16 @@ public class WhosHomeOptions
     /// arriving in the small hours. Anything worse than this counts only as proof of life.</summary>
     public double MaxAccuracyMeters { get; set; } = 250;
 
-    /// <summary>Above this speed someone reads as on the move. Compared against the speed the
-    /// device reports, not against the gap between fixes: while driving, reports arrive seconds
-    /// apart, so each step is shorter than <see cref="MovementThresholdMeters"/> and distance alone
-    /// calls a moving car parked. Roughly walking pace, well clear of a stationary phone's noise.</summary>
-    public double MovingSpeedMetersPerSecond { get; set; } = 1.5;
+    /// <summary>Above this speed someone reads as on the move. Compared against speed, not against
+    /// the gap between fixes: while driving, reports arrive seconds apart, so each step is shorter
+    /// than <see cref="MovementThresholdMeters"/> and distance alone calls a moving car parked.
+    /// <para>
+    /// Set above a brisk walk rather than just above a stroll. A phone lying still indoors has been
+    /// seen reporting 2 m/s, so a lower bar flickers the label on nothing at all. The cost is that
+    /// walking does not register as travelling, which is the right trade for a board about whether
+    /// someone is on their way rather than about what they are doing.
+    /// </para></summary>
+    public double MovingSpeedMetersPerSecond { get; set; } = 3;
 
     /// <summary>How long without any contact before someone reads as stale. Contact includes
     /// heartbeats, so this measures "the phone has stopped talking to us" rather than "the person

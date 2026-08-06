@@ -11,6 +11,12 @@ Two separate questions get confused easily, and they need different answers.
 against an anchor: the person row stores the position the clock started from, and the clock resets
 when a fix lands further than `MovementThresholdMeters` from it.
 
+Only that. Speed deliberately does not reset the clock, though it used to. A single reading is a poor
+reason to rewrite how long someone has been somewhere, and a phone lying still indoors reported 2 m/s
+and discarded a clock that had legitimately been running for forty minutes: the card claimed "home for
+3 min" for someone who had been home since before dinner. Where you are is durable, what you are doing
+this second is not.
+
 Comparing each fix against the previous one instead does not work. While driving, Traccar reports
 every few seconds, so consecutive fixes are only 75 to 90 metres apart, well under any threshold that
 survives GPS noise. A phone can travel 32 km without a single pair of fixes looking like movement.
@@ -29,10 +35,22 @@ Distance alone cannot answer it, because the sampling interval varies by orders 
 The distances are comparable. The speeds differ by fifty times.
 
 The OsmAnd protocol carries a `speed` field, and `HttpUploader` in the Traccar SDK sends it when the
-platform supplies one. Not every platform does: no report from the Android client has ever arrived
-with one. So when it is absent, speed is derived from the distance and the interval since the previous
-fix, which is why `Person.LastFixUtc` exists separately from `LastSeenUtc`. Raw distance is the last
-resort, used only for the first fix after a gap where there is no interval to divide by.
+platform supplies one. Preferred whenever present, because it comes from the GPS rather than from
+arithmetic. Measured by comparing stored values against what distance over interval would have given:
+iOS supplies it on every fix, Android on roughly a quarter of them, presumably only on true satellite
+fixes rather than network-derived ones. So the fallback has to exist, deriving speed from the distance
+and the interval since the previous fix, which is why `Person.LastFixUtc` is tracked separately from
+`LastSeenUtc`. Raw distance is the last resort, used only for the first fix after a gap where there is
+no interval to divide by.
+
+The device's figure is also the safer one during a buffered upload. A phone that has been offline
+flushes its backlog in one burst, several positions carrying the same arrival second, and distance over
+interval then produces nonsense: one such flush computed to 645 m/s on one row and 92,627 m/s on the
+next, from a genuine drive at 28 m/s.
+
+`MovingSpeedMetersPerSecond` sits above a brisk walk rather than just above a stroll, because a phone
+at rest has been seen reporting 2 m/s and a lower bar flickers the label on nothing. Walking therefore
+does not register as travelling, which suits a board about whether someone is on their way.
 
 ## Ignoring positions that cannot be trusted
 

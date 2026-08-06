@@ -121,8 +121,8 @@ fields empty.
 | `StaleAfter` | 45 min | No contact at all for this long marks a card stale |
 | `HeartbeatInterval` | 15 min | How often a stationary phone should check in |
 | `MaxAccuracyMeters` | 250 | Positions vaguer than this are ignored except as proof of life |
-| `MovingSpeedMetersPerSecond` | 1.5 | Above this reads as on the move |
-| `MovementThresholdMeters` | 200 | How far you must go for it to count as a new place |
+| `MovingSpeedMetersPerSecond` | 3 | Above a brisk walk reads as on the move |
+| `MovementThresholdMeters` | 200 | How far you must go for it to count as a new place, restarting the stop clock |
 | `ReportRetention` | 30 d | How long stored distances are kept |
 | `DatabasePath` | `/data/whoshome.db` | Must be on the mounted volume |
 | `SignInCodeLifetime` | 24 h | How long a setup link and its code last |

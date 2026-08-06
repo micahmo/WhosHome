@@ -46,9 +46,11 @@ public class PresenceService(
             ? null
             : GeoMath.DistanceMeters(latitude, longitude, person.LastLatitude.Value, person.LastLongitude.Value);
 
-        // Falling back to a speed worked out from the last fix rather than to raw distance, because
-        // whether a device reports speed is not something to depend on: every report from the
-        // Android client so far has arrived without one.
+        // The device's own figure when it offers one, since it comes from the GPS rather than from
+        // arithmetic. iOS supplies it consistently and Android only on some fixes, so the fallback
+        // has to exist. It is also the safer of the two during a buffered upload: a phone flushing a
+        // backlog delivers several positions in the same second, and distance over interval then
+        // works out at thousands of metres per second.
         double? effectiveSpeed = speedMetersPerSecond ?? ComputeSpeed(movedMeters, person.LastFixUtc, now);
         bool isMoving = IsMoving(effectiveSpeed, movedMeters);
 
@@ -65,10 +67,13 @@ public class PresenceService(
 
         bool hasRelocated = metersFromAnchor > _options.MovementThresholdMeters;
 
-        if (person.StationarySinceUtc is null || metersFromAnchor is null || isMoving || hasRelocated)
+        // Relocating restarts the clock; moving does not. Speed says what someone is doing this
+        // instant, and a single reading is a poor reason to rewrite how long they have been
+        // somewhere: a phone at rest indoors reported 2 m/s and reset a clock that had legitimately
+        // been running for forty minutes. Distance from the anchor is the durable question, and
+        // pacing around the house cannot answer it wrongly.
+        if (person.StationarySinceUtc is null || metersFromAnchor is null || hasRelocated)
         {
-            // A first report starts the clock. Moving or having relocated restarts it here, so a
-            // stop is timed from arrival rather than from whenever the last big jump happened.
             person.StationarySinceUtc = now;
             person.StationaryLatitude = latitude;
             person.StationaryLongitude = longitude;
