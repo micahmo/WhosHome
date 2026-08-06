@@ -29,8 +29,10 @@
 <ul class="board">
   {#each people as person (person.personId)}
     {@const preference = preferenceFor(person.personId)}
-    {@const settled = person.stationarySeconds !== null && !person.isStale}
     {@const moving = person.isMoving && !person.isStale}
+    <!-- Includes stale people. Where they settled, and when, stays true whatever happened after we
+         stopped hearing from them; only the running duration would be a claim we cannot support. -->
+    {@const settled = person.stationarySinceUtc !== null && !moving}
     <!-- Driving distance when routing answered, straight line otherwise. Nobody describes how far
          away they are as the crow flies, and the fallback keeps a number on the card either way. -->
     {@const shownDistance = person.travelMeters ?? person.distanceMeters}
@@ -39,6 +41,9 @@
       (deservesTimestamp(person.stationarySeconds)
         ? ` (since ${formatTimestamp(person.stationarySinceUtc)})`
         : '')}
+    <!-- The arrival time alone once a phone goes quiet. "Stopped for four hours" asserts they are
+         still there; "arrived at noon" only asserts when they got there, which we do know. -->
+    {@const arrived = formatTimestamp(person.stationarySinceUtc)}
     {@const age =
       formatAge(person.ageSeconds) +
       (deservesTimestamp(person.ageSeconds)
@@ -89,7 +94,7 @@
         <!-- Only at home do "been home this long" and "been in one spot this long" mean the same
              thing, so only here can the duration hang off the state without misleading. -->
         {#if settled && person.state === 'Home'}
-          <span class="distance">for {dwell}</span>
+          <span class="distance">{person.isStale ? `since ${arrived}` : `for ${dwell}`}</span>
         {/if}
       </p>
 
@@ -98,7 +103,9 @@
           {#if moving}
             <span class="moving">On the move</span>
           {:else if settled && person.state !== 'Home'}
-            <span class="muted">Stopped for {dwell}</span>
+            <span class="muted">
+              {person.isStale ? `Arrived ${arrived}` : `Stopped for ${dwell}`}
+            </span>
           {/if}
           {#if person.travelSeconds !== null}
             {#if moving || (settled && person.state !== 'Home')}<span class="sep">&middot;</span>{/if}
