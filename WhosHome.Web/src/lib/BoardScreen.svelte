@@ -26,6 +26,15 @@
   // Held here rather than in NotifyToggle because the bells live on the board cards.
   let preferences = $state<NotificationPreference[]>([])
 
+  // Preferences have to be refetched alongside the board, not once when push is switched on.
+  // Someone added after that first fetch gets a card but no bell, which reads as their bell
+  // being missing rather than as this list being out of date.
+  let pushEnabled = $state(false)
+
+  // Refreshing mid-toggle would overwrite the optimistic value with the pre-toggle one from the
+  // server and flip the bell back under the person's finger.
+  let togglesInFlight = 0
+
   // Admins can read the board without being a person, so the machine used for provisioning
   // does not have to register itself as a household member just to look.
   let canView = $derived(session !== null || admin)
@@ -74,20 +83,29 @@
       // different reactions and looking identical is what makes an app feel broken.
       error = navigator.onLine ? 'Could not reach the server.' : 'Offline'
     }
+
+    if (pushEnabled && togglesInFlight === 0) {
+      await loadPreferences()
+    }
   }
 
-  async function onPushEnabledChange(enabled: boolean) {
-    if (!enabled) {
-      preferences = []
-      return
-    }
-
+  async function loadPreferences() {
     try {
       preferences = await getNotificationPreferences()
     } catch {
       // No banner for this: the bells simply do not appear.
       preferences = []
     }
+  }
+
+  async function onPushEnabledChange(enabled: boolean) {
+    pushEnabled = enabled
+    if (!enabled) {
+      preferences = []
+      return
+    }
+
+    await loadPreferences()
   }
 
   async function togglePerson(preference: NotificationPreference) {
@@ -97,11 +115,14 @@
       candidate.personId === preference.personId ? { ...candidate, enabled: next } : candidate,
     )
 
+    togglesInFlight++
     try {
       await setNotificationPreference(preference.personId, next)
     } catch {
       error = `Could not change notifications for ${preference.name}.`
-      await onPushEnabledChange(true)
+      await loadPreferences()
+    } finally {
+      togglesInFlight--
     }
   }
 
