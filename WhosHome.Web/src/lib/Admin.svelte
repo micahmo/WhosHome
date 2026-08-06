@@ -477,11 +477,15 @@
     font-weight: 500;
   }
 
-  button.link {
+  /* Not button.link: the header holds an anchor as well, and scoping this to buttons left it with
+     the browser's default blue underline. */
+  .link {
+    border: none;
     background: none;
     color: var(--muted);
     font-size: 0.85rem;
     padding: 0;
+    text-decoration: none;
   }
 
   .actions {

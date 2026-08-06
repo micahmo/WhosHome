@@ -46,17 +46,39 @@ public class PresenceService(
             ? null
             : GeoMath.DistanceMeters(latitude, longitude, person.LastLatitude.Value, person.LastLongitude.Value);
 
-        bool isMoving = IsMoving(speedMetersPerSecond, movedMeters);
-        if (isMoving || person.StationarySinceUtc is null)
+        // Falling back to a speed worked out from the last fix rather than to raw distance, because
+        // whether a device reports speed is not something to depend on: every report from the
+        // Android client so far has arrived without one.
+        double? effectiveSpeed = speedMetersPerSecond ?? ComputeSpeed(movedMeters, person.LastFixUtc, now);
+        bool isMoving = IsMoving(effectiveSpeed, movedMeters);
+
+        // Measured from where the clock started, not from the previous fix. Consecutive fixes while
+        // driving are only tens of metres apart, so a per-fix comparison never fires however far the
+        // journey goes, and the clock would keep counting from wherever it last happened to reset.
+        double? metersFromAnchor = person.StationaryLatitude is null || person.StationaryLongitude is null
+            ? null
+            : GeoMath.DistanceMeters(
+                latitude,
+                longitude,
+                person.StationaryLatitude.Value,
+                person.StationaryLongitude.Value);
+
+        bool hasRelocated = metersFromAnchor > _options.MovementThresholdMeters;
+
+        if (person.StationarySinceUtc is null || metersFromAnchor is null || isMoving || hasRelocated)
         {
-            // Moving restarts the clock; a first report starts it.
+            // A first report starts the clock. Moving or having relocated restarts it here, so a
+            // stop is timed from arrival rather than from whenever the last big jump happened.
             person.StationarySinceUtc = now;
+            person.StationaryLatitude = latitude;
+            person.StationaryLongitude = longitude;
         }
 
         person.LastLatitude = latitude;
         person.LastLongitude = longitude;
         person.LastState = currentState;
         person.LastSeenUtc = now;
+        person.LastFixUtc = now;
 
         // Only worth asking when they are actually somewhere else. "0 minutes away" for someone
         // sitting at home is not information, and skipping it halves the routing traffic.
@@ -72,7 +94,8 @@ public class PresenceService(
             DistanceMeters = distanceMeters,
             TravelSeconds = route?.Seconds,
             MovedMeters = movedMeters,
-            SpeedMetersPerSecond = speedMetersPerSecond,
+            // The effective one, so the board reads the same number this decision was made on.
+            SpeedMetersPerSecond = effectiveSpeed,
             AccuracyMeters = accuracyMeters,
             BatteryPercent = batteryPercent,
         };
@@ -175,10 +198,10 @@ public class PresenceService(
     }
 
     /// <summary>
-    /// Speed decides this whenever the device reported one, because distance between fixes does not:
-    /// a car reporting every five seconds moves under a hundred metres per fix, which is less than
-    /// the noise floor a stationary phone can produce over five minutes. Distance is only the
-    /// fallback for platforms that send no speed at all.
+    /// Speed decides this, because distance between fixes cannot: a car reporting every five seconds
+    /// moves under a hundred metres per fix, which is less than the noise floor a stationary phone
+    /// produces over five minutes. Raw distance survives only for the first fix after a gap, where
+    /// there is no interval to divide by.
     /// </summary>
     private bool IsMoving(double? speedMetersPerSecond, double? movedMeters)
     {
@@ -188,6 +211,26 @@ public class PresenceService(
         }
 
         return movedMeters > _options.MovementThresholdMeters;
+    }
+
+    /// <summary>
+    /// Speed between two fixes. Null when there is nothing to measure against, or when the two
+    /// arrived in the same instant, which would divide by zero and report an infinite speed.
+    /// </summary>
+    private static double? ComputeSpeed(double? movedMeters, DateTimeOffset? previousFixUtc, DateTimeOffset now)
+    {
+        if (movedMeters is null || previousFixUtc is null)
+        {
+            return null;
+        }
+
+        double seconds = (now - previousFixUtc.Value).TotalSeconds;
+        if (seconds <= 0)
+        {
+            return null;
+        }
+
+        return movedMeters.Value / seconds;
     }
 
     private PresenceState Classify(double distanceMeters)

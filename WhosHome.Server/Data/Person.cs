@@ -52,10 +52,24 @@ public class Person
     /// </summary>
     public DateTimeOffset? LastSeenUtc { get; set; }
 
-    /// <summary>When this person last settled in one spot. Reset whenever they move further than
-    /// the movement threshold, so "here for two hours" measures the current stop rather than the
-    /// time since they were last seen.</summary>
+    /// <summary>When this person last settled in one spot, measuring the current stop rather than
+    /// the time since they were last seen.</summary>
     public DateTimeOffset? StationarySinceUtc { get; set; }
+
+    /// <summary>
+    /// The spot <see cref="StationarySinceUtc"/> refers to. The clock resets when a fix lands
+    /// further than the movement threshold from here, which is the only way to notice a journey made
+    /// of steps that are individually too small to count: a car reporting every few seconds moves
+    /// under a hundred metres per fix and can cross a county without any single pair of fixes
+    /// looking like movement.
+    /// </summary>
+    public double? StationaryLatitude { get; set; }
+
+    public double? StationaryLongitude { get; set; }
+
+    /// <summary>When the previous position arrived, as opposed to the previous contact of any kind.
+    /// Needed to turn a distance between two fixes into a speed for devices that report none.</summary>
+    public DateTimeOffset? LastFixUtc { get; set; }
 
     public List<PositionReport> Reports { get; set; } = [];
 
