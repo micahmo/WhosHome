@@ -116,7 +116,7 @@ fields empty.
 | `HomeLatitude` / `HomeLongitude` | unset | **Required.** Everything is measured from here |
 | `AdminToken` | unset | **Required** to add people. Admin is disabled without it |
 | `HomeRadiusMeters` | 150 | Inside this counts as home |
-| `NearbyRadiusMeters` | 3219 | Two miles. Inside this counts as near home, and crossing in notifies |
+| `NearbyRadiusMeters` | 2400 | Inside this counts as near home, and crossing in notifies. Roughly two miles of driving |
 | `OsrmBaseUrl` | unset | An [OSRM](https://project-osrm.org/) server, for driving distance and time |
 | `StaleAfter` | 45 min | No contact at all for this long marks a card stale |
 | `HeartbeatInterval` | 15 min | How often a stationary phone should check in |

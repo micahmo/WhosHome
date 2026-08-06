@@ -135,7 +135,7 @@
   }
 
   .error {
-    color: var(--away);
+    color: var(--danger);
     font-size: 0.8rem;
     margin: 0.25rem 0 0;
   }

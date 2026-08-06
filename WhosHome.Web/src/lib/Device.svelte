@@ -191,7 +191,7 @@
   }
 
   .error {
-    color: var(--away);
+    color: var(--danger);
     font-size: 0.9rem;
   }
 </style>

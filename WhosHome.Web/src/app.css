@@ -18,9 +18,17 @@
   --line: #2c2c31;
   --accent: #f2f2f4;
   --accent-text: #121214;
+  /* The three presence states. Away is blue rather than red because nothing on this board is a
+     problem to act on: someone being out is ordinary, and red claimed otherwise. Amber is the only
+     state worth reacting to, being the ring that fires a notification. Keeping red off the board
+     entirely also means that when red does appear, it is genuinely an error. */
   --home: #48c46b;
   --nearby: #e0a93b;
-  --away: #e0655b;
+  --away: #529fe0;
+
+  /* Errors and destructive actions. Separate from the state colours, which it has no relationship
+     to: it only ever looked like one because both wanted the same red. */
+  --danger: #e0655b;
 
   /* Makes form controls, scrollbars and the like render dark to match. */
   color-scheme: dark;

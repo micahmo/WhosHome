@@ -472,7 +472,7 @@
 
   button.danger {
     background: none;
-    color: var(--away);
+    color: var(--danger);
     border: 1px solid var(--line);
     font-weight: 500;
   }
@@ -592,7 +592,7 @@
   }
 
   .error {
-    color: var(--away);
+    color: var(--danger);
     font-size: 0.9rem;
   }
 </style>

@@ -153,6 +153,39 @@ field near home, was correctly discarded rather than shown as a plausible-lookin
 Coordinates are formatted to six decimal places on the way out. This is not tidiness: OSRM answers
 `{"code":"InvalidQuery"}` for a coordinate carrying a double's full precision.
 
+### Why the nearby radius is not the distance it looks like
+
+State comes from a straight line, but people think in driving distance, so the radius has to absorb
+the difference. `NearbyRadiusMeters` was originally set to 3219, being two miles exactly, and the
+result was that people read as near home while still nearly three miles of driving away.
+
+Measured rather than guessed, by fanning sample points out in eighteen directions from one household
+at a range of straight-line distances and asking OSRM to drive each of them home. Points whose
+nearest road lay beyond `OsrmMaxSnapMeters` were discarded, so the sample contains only positions the
+app itself would have trusted a route for. From 306 accepted samples, the straight-line distance
+equivalent to two driving miles came out as:
+
+| | straight-line miles | metres |
+| --- | --- | --- |
+| minimum | 1.14 | 1834 |
+| median | 1.47 | 2366 |
+| maximum | 1.73 | 2779 |
+
+Median detour factor 1.34. Hence the default of 2400.
+
+Two things worth keeping in mind. No circle can be right in every direction: at 2400 m the boundary
+falls at about 2.6 driving miles where roads run straight towards the house and about 1.7 where they
+do not, and that spread is inherent rather than a defect. And detour factors below 1 turn up at very
+short distances, which is a snapping artifact rather than a discovery, since a 250 m snap can make a
+routed distance shorter than the unsnapped straight line when the whole trip is only 600 m.
+
+The alternative, should the spread ever matter, is to hold the threshold in driving metres and keep
+the calibrated straight-line figure purely as the fallback for when routing does not answer. That
+would put the boundary at exactly two driving miles in every direction, and an OSRM outage would
+shift it by a few hundred metres rather than by a mile. The reason classification uses the straight
+line at all is that a routing outage must never move anyone between states; calibrating the fallback
+is what would make a driving-based threshold safe.
+
 After a failure, routing pauses for `OsrmFailureCooldown`. That must comfortably exceed the interval
 between reports, or the cooldown expires before the next one arrives and every report pays the
 timeout anyway.

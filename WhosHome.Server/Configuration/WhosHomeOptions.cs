@@ -13,10 +13,15 @@ public class WhosHomeOptions
     public double HomeRadiusMeters { get; set; } = 150;
 
     /// <summary>Inside this radius a person reads as near home rather than away, and crossing into
-    /// it is what triggers a "getting close" notification. Two miles by default. Five was the
-    /// original choice and proved too generous: you can drive a long way through it before the
-    /// board admits you have gone anywhere.</summary>
-    public double NearbyRadiusMeters { get; set; } = 3219;
+    /// it is what triggers a "getting close" notification.
+    /// <para>
+    /// A straight line stands in for a drive here, so the number has to absorb the difference.
+    /// Sampling eighteen directions around one household put two driving miles at a median of 1.47
+    /// straight-line miles, a detour factor of about 1.34, so this is roughly two miles of driving
+    /// rather than two miles of crow. Somewhere with a denser or sparser road network would want a
+    /// different figure, which is why this is configurable and not a constant.
+    /// </para></summary>
+    public double NearbyRadiusMeters { get; set; } = 2400;
 
     /// <summary>Worst reported accuracy a fix may have and still be believed. A phone waking up
     /// indoors answers with a cell-tower estimate accurate to a kilometre or more, which cannot

@@ -331,6 +331,6 @@
   }
 
   .error {
-    color: var(--away);
+    color: var(--danger);
   }
 </style>

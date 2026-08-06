@@ -49,10 +49,11 @@
       (deservesTimestamp(person.ageSeconds)
         ? ` (at ${formatTimestamp(person.lastSeenUtc)})`
         : '')}
-    <li class="card" class:stale={person.isStale}>
+    <!-- State lives on the card, not just the dot, so anything inside can pick up the colour. -->
+    <li class="card" class:stale={person.isStale} data-state={person.state}>
       <div class="head">
         <span class="who">
-          <span class="dot" data-state={person.state}></span>
+          <span class="dot"></span>
           <span class="name">{person.name}</span>
         </span>
 
@@ -166,25 +167,30 @@
     min-width: 0;
   }
 
-  .dot {
+  /* Declared on the card rather than the dot, so the dot and the movement text can both read it and
+     cannot drift apart. Unknown falls through to muted. */
+  .card {
     --state-color: var(--muted);
+  }
+
+  .card[data-state='Home'] {
+    --state-color: var(--home);
+  }
+
+  .card[data-state='Nearby'] {
+    --state-color: var(--nearby);
+  }
+
+  .card[data-state='Away'] {
+    --state-color: var(--away);
+  }
+
+  .dot {
     width: 0.7rem;
     height: 0.7rem;
     border-radius: 50%;
     flex-shrink: 0;
     background: var(--state-color);
-  }
-
-  .dot[data-state='Home'] {
-    --state-color: var(--home);
-  }
-
-  .dot[data-state='Nearby'] {
-    --state-color: var(--nearby);
-  }
-
-  .dot[data-state='Away'] {
-    --state-color: var(--away);
   }
 
   /* A stale card stays at full brightness. Dimming it looks like the person has been disabled, when
@@ -248,8 +254,10 @@
     font-weight: 500;
   }
 
+  /* The card's own state colour, so movement reads against where they are rather than as a separate
+     thing to decode. Safe now that no state is red: motion in red looked like a fault. */
   .moving {
-    color: var(--nearby);
+    color: var(--state-color);
   }
 
   .muted {
