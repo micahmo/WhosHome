@@ -115,12 +115,14 @@
       {/if}
 
       <p class="meta">
-        <!-- Said in words rather than implied by styling. Someone glancing at a faded card guesses
-             at what it means, and "switched off" is the guess they land on. -->
-        {#if person.isStale && person.ageSeconds !== null}
-          <span class="quiet">Phone not checking in</span><span class="sep">&middot;</span>
-        {/if}
         {age}
+        <!-- Still said in words rather than left to styling, because a card that only looked
+             different would read as "switched off". But it follows the time and shares its colour:
+             iPhones cannot check in while stationary, so this is the ordinary state of things for
+             half the household rather than a fault worth colouring like one. -->
+        {#if person.isStale && person.ageSeconds !== null}
+          <span class="sep">&middot;</span>not checking in
+        {/if}
         <!-- Dropped once a phone goes quiet. Everything else on the card was true when it was
              measured and stays true until contradicted, but a battery only ever falls, so an old
              reading is not stale information, it is wrong information. -->
@@ -259,11 +261,6 @@
     font-size: 0.8rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
-  }
-
-  /* Amber rather than red: a quiet phone is worth knowing about, but it is not a failure. */
-  .quiet {
-    color: var(--nearby);
   }
 
   .sep {
