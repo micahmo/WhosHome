@@ -153,6 +153,28 @@
     <header>
       <h1>Who's Home</h1>
       <span class="header-links">
+        <!-- An installed app has no address bar and no pull to refresh, so without this the only
+             way to force an update is to close and reopen it. A full reload rather than just
+             re-fetching the board, because that is what "refresh" means to whoever taps it, and
+             because it also picks up a new build after the server has been updated. -->
+        <button
+          class="icon"
+          aria-label="Refresh"
+          title="Refresh"
+          onclick={() => location.reload()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M20 12a8 8 0 1 1-2.34-5.66M20 4v3.5h-3.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+
         {#if session}
           <!-- Only for a member: an admin browsing the board has no phone on it to configure. -->
           <a class="link" href="/device">My phone</a>
@@ -192,19 +214,51 @@
     padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
   }
 
+  /* Wraps rather than squeezing the title. A browser that is both a member and an admin carries four
+     controls here, which is enough to break "Who's Home" across two lines on a phone. */
   header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.75rem;
     margin-bottom: 0.75rem;
   }
 
+  h1 {
+    white-space: nowrap;
+  }
+
   .header-links {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.9rem;
     flex-shrink: 0;
+    /* Keeps them on the right when they wrap onto a line of their own, where space-between would
+       otherwise leave a single item hard against the left edge. */
+    margin-left: auto;
+  }
+
+  /* Sized for a thumb rather than to match the text links, since it is the one control here that
+     gets tapped repeatedly. */
+  .icon {
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0.25rem;
+    border: none;
+    background: none;
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+  }
+
+  .icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .icon:active {
+    color: var(--text);
   }
 
   h1 {

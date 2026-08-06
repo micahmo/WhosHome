@@ -114,7 +114,10 @@
           <span class="quiet">Phone not checking in</span><span class="sep">&middot;</span>
         {/if}
         {age}
-        {#if person.batteryPercent !== null}
+        <!-- Dropped once a phone goes quiet. Everything else on the card was true when it was
+             measured and stays true until contradicted, but a battery only ever falls, so an old
+             reading is not stale information, it is wrong information. -->
+        {#if person.batteryPercent !== null && !person.isStale}
           <span class="sep">&middot;</span>{Math.round(person.batteryPercent)}% battery
         {/if}
       </p>
