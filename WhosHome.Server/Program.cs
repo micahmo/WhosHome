@@ -10,12 +10,14 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using WhosHome.Server.Auth;
 using WhosHome.Server.Configuration;
 using WhosHome.Server.Data;
 using WhosHome.Server.Ingest;
+using WhosHome.Server.Logging;
 using WhosHome.Server.Notifications;
 using WhosHome.Server.Presence;
 using WhosHome.Server.Retention;
@@ -43,6 +45,12 @@ IConfigurationRoot settings = new ConfigurationBuilder()
 builder.Services.Configure<WhosHomeOptions>(settings);
 builder.Services.AddSingleton(TimeProvider.System);
 
+// One line per entry, timestamped, no namespaces. These logs are read through `docker logs`, where
+// the default formatter's two-line entries and fully qualified categories crowd out the message.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(console => console.FormatterName = CompactConsoleFormatter.FormatterName);
+builder.Logging.AddConsoleFormatter<CompactConsoleFormatter, ConsoleFormatterOptions>();
+
 // The web client reads states by name. Integers would make the UI depend on enum ordering.
 builder.Services.ConfigureHttpJsonOptions(jsonOptions =>
     jsonOptions.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -60,7 +68,13 @@ builder.Services.AddHostedService<RetentionService>();
 
 // Web push needs a stable VAPID keypair. Generated on first run and kept on the volume, because
 // changing it silently invalidates every existing subscription.
-using (ILoggerFactory startupLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole()))
+// Built before the host, so it needs the formatter wired up separately or this one entry would
+// arrive in a different shape from every other.
+using (ILoggerFactory startupLoggerFactory = LoggerFactory.Create(logging =>
+{
+    logging.AddConsole(console => console.FormatterName = CompactConsoleFormatter.FormatterName);
+    logging.AddConsoleFormatter<CompactConsoleFormatter, ConsoleFormatterOptions>();
+}))
 {
     VapidKeys vapidKeys = VapidKeyStore.LoadOrCreate(
         databaseDirectory,
