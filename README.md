@@ -130,6 +130,45 @@ the board. The token is the way back in when no browser holds admin mode.
 Sessions are cookie based with sliding expiry. The Data Protection keys that sign them are
 written next to the database, so a container update does not sign the household out.
 
+`GET /api/admin/session` answers "is this browser an admin" with 200 or 401, so a 401 on loading
+the admin page is the expected answer for a browser that has not entered admin mode yet, not a
+failure.
+
+## Setup links
+
+Minting a link sets two things at once: a six digit **code** and an unguessable **token**, both
+valid for `SignInCodeLifetime`.
+
+Signing in consumes the code and leaves the token alive until it expires. That is deliberate, so
+someone can reopen their setup page to redo their phone without another link being minted. Once
+the token expires the link disappears from the admin page on its own, because `/api/people` only
+returns `setupUrl` while the token is live. Nothing is deleted.
+
+A live link is a credential: the page behind it hands over the sign-in code and the device id.
+The admin page therefore keeps links collapsed until asked for, and a collapsed link is absent
+from the page rather than merely hidden. A freshly minted one opens by itself, because minting one
+means you are about to send it.
+
+There is no way to revoke a link early. Replacing it mints a new one, which invalidates whatever
+was already sent.
+
+## Ordering
+
+People appear in the order they were added, not alphabetically, so the board does not reshuffle
+as the household grows. `Person.SortOrder` holds the position; it is seeded from the row id and
+new people are appended past the current maximum.
+
+The admin page can drag rows into any order, which rewrites every position through
+`PUT /api/people/order`. That endpoint takes the complete order and rejects anything that is not
+a permutation of the household, because a partial list would leave the people it omits sharing
+positions with the ones it names.
+
+Dragging uses pointer events rather than the HTML5 drag API, which never fires on touch, and the
+handle sets `touch-action: none` or the browser claims the gesture as a scroll. The insertion
+point is judged against the other rows' midpoints rather than the dragged row's own, which is what
+stops it oscillating when rows differ in height. Arrow keys on the handle do the same job without
+a pointer.
+
 ## Notifications
 
 Web push, delivered to the service worker. The VAPID keypair is generated on first run and stored
@@ -197,6 +236,7 @@ the server URL from the link's own origin and path.
 | `DELETE` `/api/admin/session` | none | Leave admin mode |
 | `GET`/`POST` `/api/people` | admin | List and add household members |
 | `DELETE` `/api/people/{id}` | admin | Remove someone; their reports cascade |
+| `PUT` `/api/people/order` | admin | Set the display order; takes every id exactly once |
 | `POST` `/api/people/{id}/code` | admin | Mint a sign-in code and setup link |
 | `GET` `/api/setup/{token}` | setup token | What the setup page shows someone |
 | `GET` `/api/push/key` | none | Public VAPID key, public by design |
@@ -222,6 +262,15 @@ nothing else.
 Tracking does not resume after a phone reboot, and an app update can switch it off. Heartbeats make
 that visible rather than preventing it: the card goes stale and says the phone is not checking in,
 but only the person holding the phone can start it again.
+
+Heartbeats appear not to work on iOS at all. Traccar registers the background task identifier
+`org.traccar.client.heartbeat`, but the app's `Info.plist` lists only `com.transistorsoft.fetch`
+under `BGTaskSchedulerPermittedIdentifiers`, and iOS rejects any identifier missing from that list.
+Even were it registered, iOS schedules `BGAppRefreshTask` at its own discretion, so an interval
+would be a floor rather than a promise. Combined with stop detection being on by default, an
+iPhone that settles in one place can go silent indefinitely with nothing to break the silence.
+Sending those phones a link with `stop_detection=false` keeps them reporting on the interval, at
+a cost in battery.
 
 Routing only works inside the region OSRM was built for. Positions outside it are discarded, so
 travel time disappears rather than showing a wrong number.

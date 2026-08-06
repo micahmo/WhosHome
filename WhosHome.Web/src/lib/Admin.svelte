@@ -284,7 +284,10 @@
   {:else}
     <header>
       <h1>Admin</h1>
-      <button class="link" onclick={leaveAdmin}>Leave admin mode</button>
+      <span class="header-links">
+        <a class="link" href="/">Board</a>
+        <button class="link" onclick={leaveAdmin}>Leave admin mode</button>
+      </span>
     </header>
 
     <form class="add" onsubmit={add}>
@@ -382,6 +385,14 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .header-links {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    flex-shrink: 0;
   }
 
   h1 {

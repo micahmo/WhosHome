@@ -56,9 +56,10 @@
   async function start() {
     try {
       session = await getSession()
-      if (!session) {
-        admin = await isAdmin()
-      }
+      // Asked even when signed in, because being a member and being an admin are independent.
+      // Skipping it when a session exists is what left the admin page unreachable from the board
+      // on the one browser most likely to be both.
+      admin = await isAdmin()
       await refresh()
     } finally {
       starting = false
@@ -151,11 +152,14 @@
 
     <header>
       <h1>Who's Home</h1>
-      {#if session}
-        <button class="link" onclick={leave}>Sign out</button>
-      {:else}
-        <a class="link" href="/admin">Admin</a>
-      {/if}
+      <span class="header-links">
+        {#if admin}
+          <a class="link" href="/admin">Admin</a>
+        {/if}
+        {#if session}
+          <button class="link" onclick={leave}>Sign out</button>
+        {/if}
+      </span>
     </header>
 
     {#if !session}
@@ -188,7 +192,15 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    gap: 0.75rem;
     margin-bottom: 0.75rem;
+  }
+
+  .header-links {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    flex-shrink: 0;
   }
 
   h1 {
