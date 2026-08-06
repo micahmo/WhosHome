@@ -225,6 +225,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         report.AccuracyMeters,
         report.BatteryPercent,
         report.SpeedMetersPerSecond,
+        report.IsCharging,
         cancellationToken);
 
     logger.LogInformation(

@@ -28,6 +28,8 @@ export interface PresenceView {
   /** The device has gone quiet entirely, heartbeats included, so the state shown is history. */
   isStale: boolean
   batteryPercent: number | null
+  /** Whether the phone was charging. Null when the device did not say. */
+  isCharging: boolean | null
 }
 
 export interface Session {

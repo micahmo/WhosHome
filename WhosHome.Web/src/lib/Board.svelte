@@ -128,7 +128,13 @@
              measured and stays true until contradicted, but a battery only ever falls, so an old
              reading is not stale information, it is wrong information. -->
         {#if person.batteryPercent !== null && !person.isStale}
-          <span class="sep">&middot;</span>{Math.round(person.batteryPercent)}% battery
+          <span class="sep">&middot;</span>{#if person.isCharging}<!--
+            Drawn rather than typed. U+26A1 is a colour emoji on every platform that ships an emoji
+            font, and the monochrome alternatives are missing often enough to leave a tofu box, so
+            this follows the bell and the drag handle in being inline SVG on currentColor.
+          --><svg class="bolt" viewBox="3 1 16 22" aria-label="charging" role="img">
+              <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor" />
+            </svg>{/if}{Math.round(person.batteryPercent)}% battery
         {/if}
       </p>
     </li>
@@ -269,6 +275,19 @@
     font-size: 0.8rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Sized against the cap height of the digits beside it rather than against the font size, since a
+     glyph filling the em box reads as too small next to text. Inherits the meta colour, so it stays
+     as quiet as the number it qualifies.
+     The viewBox carries a one-unit margin around the path: cropped exactly to the path, the sharp
+     rightmost vertex sat on the boundary and antialiasing shaved it, which looked like clipping.
+     These values are therefore 22/20 and 16/14 of the drawn size to leave that margin outside it. */
+  .bolt {
+    height: 0.857em;
+    width: 0.623em;
+    margin-right: 0.22em;
+    vertical-align: -0.06em;
   }
 
   .sep {

@@ -14,7 +14,8 @@ public sealed record OsmAndReport(
     DateTimeOffset Timestamp,
     double? AccuracyMeters,
     double? BatteryPercent,
-    double? SpeedMetersPerSecond)
+    double? SpeedMetersPerSecond,
+    bool? IsCharging)
 {
     /// <summary>
     /// A report with no coordinates means the device is alive but has not moved. Accepting these
@@ -74,6 +75,8 @@ public static class OsmAndParser
             ? speedValue * MetersPerSecondPerKnot
             : null;
 
+        bool? charging = TryGetBool(values, "charge", out bool chargingValue) ? chargingValue : null;
+
         report = new OsmAndReport(
             deviceId,
             hasLatitude ? latitude : null,
@@ -81,7 +84,8 @@ public static class OsmAndParser
             timestamp,
             accuracy,
             battery,
-            speed);
+            speed,
+            charging);
         error = null;
         return true;
     }
@@ -112,6 +116,33 @@ public static class OsmAndParser
     private static string? Get(IReadOnlyDictionary<string, string?> values, string key)
     {
         return values.TryGetValue(key, out string? value) ? value : null;
+    }
+
+    /// <summary>
+    /// The protocol sends booleans as the literal words, which is what the client's uploader writes.
+    /// Digits are accepted too, since other senders of this protocol use them.
+    /// </summary>
+    private static bool TryGetBool(IReadOnlyDictionary<string, string?> values, string key, out bool result)
+    {
+        result = false;
+        string? raw = Get(values, key)?.Trim();
+        if (string.IsNullOrEmpty(raw))
+        {
+            return false;
+        }
+
+        if (bool.TryParse(raw, out result))
+        {
+            return true;
+        }
+
+        if (raw is "1" or "0")
+        {
+            result = raw is "1";
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryGetDouble(IReadOnlyDictionary<string, string?> values, string key, out double result)

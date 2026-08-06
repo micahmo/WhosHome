@@ -26,6 +26,7 @@ public class PresenceService(
         double? accuracyMeters,
         double? batteryPercent,
         double? speedMetersPerSecond,
+        bool? isCharging,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(person);
@@ -104,6 +105,7 @@ public class PresenceService(
             SpeedMetersPerSecond = effectiveSpeed,
             AccuracyMeters = accuracyMeters,
             BatteryPercent = batteryPercent,
+            IsCharging = isCharging,
         };
 
         context.Reports.Add(report);
@@ -201,6 +203,7 @@ public class PresenceService(
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,
             BatteryPercent = latest.BatteryPercent,
+            IsCharging = latest.IsCharging,
         };
     }
 

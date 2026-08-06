@@ -45,4 +45,8 @@ public class PositionReport
     public double? AccuracyMeters { get; set; }
 
     public double? BatteryPercent { get; set; }
+
+    /// <summary>Whether the phone was on a charger. Qualifies <see cref="BatteryPercent"/>: a low
+    /// reading only matters when nothing is putting charge back in.</summary>
+    public bool? IsCharging { get; set; }
 }

@@ -52,4 +52,8 @@ public sealed record PresenceView
     public required bool IsStale { get; init; }
 
     public double? BatteryPercent { get; init; }
+
+    /// <summary>Whether the phone was charging when it last reported. Null when the device did not
+    /// say, which is why the card shows nothing rather than assuming it was not.</summary>
+    public bool? IsCharging { get; init; }
 }
