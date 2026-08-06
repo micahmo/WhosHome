@@ -297,7 +297,7 @@ app.MapGet("/api/notifications", async (
 
     List<Person> people = await context.People
         .AsNoTracking()
-        .OrderBy(person => person.Name)
+        .OrderBy(person => person.Id)
         .ToListAsync(cancellationToken);
 
     return Results.Ok(people.Select(person => new
@@ -497,7 +497,7 @@ app.MapGet("/api/people", async (
 
     List<Person> people = await context.People
         .AsNoTracking()
-        .OrderBy(person => person.Name)
+        .OrderBy(person => person.Id)
         .ToListAsync(cancellationToken);
 
     // The live setup link comes back with each person so the admin page can show it again after

@@ -98,9 +98,11 @@ public class PresenceService(
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
 
+        // Ordered by the order people were added, not alphabetically, so the board stays put as the
+        // household grows. Id is the creation order and, unlike CreatedUtc, cannot tie.
         List<Person> people = await context.People
             .AsNoTracking()
-            .OrderBy(person => person.Name)
+            .OrderBy(person => person.Id)
             .ToListAsync(cancellationToken);
 
         List<PresenceView> views = new(people.Count);
