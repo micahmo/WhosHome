@@ -51,6 +51,18 @@ public class WhosHomeOptions
     /// no way to distinguish that from one that has stopped working.</summary>
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>How long a report's claim that someone is moving stays believable.
+    /// <para>
+    /// Movement is a statement about now, but it is read off whatever the last report said, and that
+    /// report can be arbitrarily old. Worse, the bias runs the wrong way: a phone goes quiet because
+    /// its owner stopped, so the final report of a journey is often one taken while still rolling.
+    /// Two iPhones sat on "on the move" for thirty five minutes after parking at home for exactly
+    /// that reason. Android hides the same flaw by reporting every minute or two.
+    /// </para>
+    /// Set above the interval a moving phone reports at, so a genuinely moving person is never
+    /// cleared between fixes. iOS wakes roughly every five minutes, hence six.</summary>
+    public TimeSpan MovingClaimLifetime { get; set; } = TimeSpan.FromMinutes(6);
+
     /// <summary>How far a fix must be from the previous one to count as movement rather than GPS
     /// noise. Reports arrive with around 100 m accuracy and Traccar Client's own distance filter
     /// is 75 m, so a stationary phone can appear to wander over 100 m. This sits above that.</summary>

@@ -122,6 +122,7 @@ fields empty.
 | `HeartbeatInterval` | 15 min | How often a stationary phone should check in |
 | `MaxAccuracyMeters` | 250 | Positions vaguer than this are ignored except as proof of life |
 | `MovingSpeedMetersPerSecond` | 3 | Above a brisk walk reads as on the move |
+| `MovingClaimLifetime` | 6 min | How long "on the move" is believed after the report that said so |
 | `MovementThresholdMeters` | 200 | How far you must go for it to count as a new place, restarting the stop clock |
 | `ReportRetention` | 30 d | How long stored distances are kept |
 | `DatabasePath` | `/data/whoshome.db` | Must be on the mounted volume |

@@ -52,6 +52,25 @@ next, from a genuine drive at 28 m/s.
 at rest has been seen reporting 2 m/s and a lower bar flickers the label on nothing. Walking therefore
 does not register as travelling, which suits a board about whether someone is on their way.
 
+### Movement expires
+
+"On the move" describes this moment but is read off the latest report, which may be old, so it is only
+believed for `MovingClaimLifetime` after that report was received.
+
+Without that, the bias runs precisely the wrong way. A phone stops reporting *because* its owner
+stopped, so the last report of a journey is disproportionately likely to be one taken while still
+rolling. Two iPhones arrived home at about 7 m/s, went quiet as iOS does when stationary, and sat on
+"on the move" for thirty five minutes. The dwell line was suppressed the whole time too, since it is
+hidden while someone is moving, so both cards were wrong twice over from one cause.
+
+Android hides this rather than avoiding it: reporting every minute or two, it self-corrects within
+about ninety seconds, so the flaw was there from the start and simply never visible.
+
+The lifetime is measured from the report, not from last contact, because a check-in carries no
+position and therefore says nothing about whether anyone is still going anywhere. It needs to exceed
+the interval at which a moving phone reports, or a genuinely moving person would be cleared between
+fixes; iOS wakes roughly every five minutes, hence six.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is

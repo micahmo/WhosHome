@@ -180,7 +180,13 @@ public class PresenceService(
         // phone heartbeats without sending a position, so measuring from the last report would call
         // someone stale for the ordinary act of sitting still.
         TimeSpan age = now - (person.LastSeenUtc ?? latest.ReceivedUtc);
-        bool isMoving = IsMoving(latest.SpeedMetersPerSecond, latest.MovedMeters);
+
+        // Movement expires, because it describes this moment and is read off a report that may be
+        // old. Measured from the report rather than from last contact, since a check-in carries no
+        // position and so says nothing about whether anyone is still going anywhere.
+        bool movingWhenLastSeen = IsMoving(latest.SpeedMetersPerSecond, latest.MovedMeters);
+        bool isMoving = movingWhenLastSeen
+            && now - latest.ReceivedUtc <= _options.MovingClaimLifetime;
 
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside.
