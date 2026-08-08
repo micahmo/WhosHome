@@ -68,6 +68,17 @@ public class WhosHomeOptions
     /// is 75 m, so a stationary phone can appear to wander over 100 m. This sits above that.</summary>
     public double MovementThresholdMeters { get; set; } = 200;
 
+    /// <summary>How long a stop must hold before the board says how long it has lasted.
+    /// <para>
+    /// Stopping is reported the instant one fix reads slow, and a journey is full of those: traffic
+    /// lights, and the first fix from a phone that has just woken and does not yet know it is in a
+    /// moving car. One such fix reported 0.01 m/s at 32 m accuracy and put "stopped for under a
+    /// minute" on a card mid-drive, corrected fifty two seconds later.
+    /// </para>
+    /// Only the duration waits. Where someone is and whether they are moving are still reported
+    /// immediately. Set above the longest pause nobody would call a stop.</summary>
+    public TimeSpan DwellDebounce { get; set; } = TimeSpan.FromMinutes(2);
+
     /// <summary>How long derived reports are kept before deletion.</summary>
     public TimeSpan ReportRetention { get; set; } = TimeSpan.FromDays(30);
 

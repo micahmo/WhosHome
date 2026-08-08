@@ -188,6 +188,18 @@ public class PresenceService(
         bool isMoving = movingWhenLastSeen
             && now - latest.ReceivedUtc <= _options.MovingClaimLifetime;
 
+        // A stop is not worth describing until it has held. The anchor resets all through a journey,
+        // so mid-drive the clock has always only just started, and one slow fix is enough to present
+        // that as a stop rather than as the traffic light it usually is. Waiting also means every
+        // duration the board shows is one worth reading.
+        bool dwellHasHeld = person.StationarySinceUtc is not null
+            && now - person.StationarySinceUtc.Value >= _options.DwellDebounce;
+
+        // Suppressed while moving, where it would describe a place someone has already left. Stale
+        // cards keep theirs: where they settled and when stays true whatever happened after we
+        // stopped hearing from them, and the UI shows the arrival time rather than a running count.
+        DateTimeOffset? dwellSince = isMoving || !dwellHasHeld ? null : person.StationarySinceUtc;
+
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside.
         return new PresenceView
@@ -199,12 +211,8 @@ public class PresenceService(
             TravelSeconds = latest.TravelSeconds,
             TravelMeters = latest.TravelMeters,
             IsMoving = isMoving,
-            // Suppressed while moving, and while stale, where it would otherwise claim someone has
-            // been standing still for hours when really we just stopped hearing from them.
-            StationarySeconds = isMoving || person.StationarySinceUtc is null
-                ? null
-                : (now - person.StationarySinceUtc.Value).TotalSeconds,
-            StationarySinceUtc = isMoving ? null : person.StationarySinceUtc,
+            StationarySeconds = dwellSince is null ? null : (now - dwellSince.Value).TotalSeconds,
+            StationarySinceUtc = dwellSince,
             LastSeenUtc = person.LastSeenUtc ?? latest.ReceivedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,

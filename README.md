@@ -124,6 +124,7 @@ fields empty.
 | `MovingSpeedMetersPerSecond` | 3 | Above a brisk walk reads as on the move |
 | `MovingClaimLifetime` | 6 min | How long "on the move" is believed after the report that said so |
 | `MovementThresholdMeters` | 200 | How far you must go for it to count as a new place, restarting the stop clock |
+| `DwellDebounce` | 2 min | How long a stop must last before the card says how long it has lasted |
 | `ReportRetention` | 30 d | How long stored distances are kept |
 | `DatabasePath` | `/data/whoshome.db` | Must be on the mounted volume |
 | `SignInCodeLifetime` | 24 h | How long a setup link and its code last |

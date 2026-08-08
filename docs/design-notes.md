@@ -71,6 +71,34 @@ position and therefore says nothing about whether anyone is still going anywhere
 the interval at which a moving phone reports, or a genuinely moving person would be cleared between
 fixes; iOS wakes roughly every five minutes, hence six.
 
+### A stop has to hold before it is claimed
+
+The duration on a card waits `DwellDebounce` before it appears. Where someone is, and whether they
+are moving, are reported immediately; only the how-long-for waits.
+
+Stopping is inferred from a single fix reading slow, and a journey is full of those. Two effects
+compound. The anchor resets every time someone travels `MovementThresholdMeters`, so mid-drive the
+stop clock has always just restarted, which means any spurious stop looks like one that began
+seconds ago and reads entirely plausibly. And a phone that has been asleep does not know it is in a
+moving car: the first fix after a long silence comes back with no speed history behind it.
+
+Both at once, observed on a card: a phone waking after fourteen hours reported 0.01 m/s at 32 m
+accuracy while its owner was driving away from the house, having moved 286 m since its previous fix.
+The card read "Stopped for under a minute" for fifty two seconds, until the next fix said 5.3 m/s.
+The other phone in the same car, already awake, reported 6.53 m/s on its equivalent fix and read
+correctly throughout, which is what makes this a property of the waking fix rather than of the
+device.
+
+Two minutes covers traffic lights and cold fixes without delaying a real arrival noticeably. It also
+makes "for under a minute" unreachable, so every duration the board prints is one worth reading.
+
+What this does not fix: a phone that goes quiet, is driven somewhere, and wakes up parked. The
+anchor resets on the waking fix, so the clock starts then however long they have really been there.
+One phone reported at 12:44, went silent, and reported again at 18:14 from 383 m away; its card
+claimed a fresh stop for a car that had been parked five and a half hours. A debounce only delays
+that number by two minutes. Knowing when a stop began that we did not witness is a different
+problem.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is
