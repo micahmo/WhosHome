@@ -21,9 +21,28 @@
     blocked = Notification.permission === 'denied'
 
     const registration = await navigator.serviceWorker.ready
-    enabled = (await registration.pushManager.getSubscription()) !== null
+    const subscription = await registration.pushManager.getSubscription()
+    enabled = subscription !== null
     onEnabledChange(enabled)
+
+    if (subscription) {
+      // This switch shows what the browser holds; whether anything arrives depends on what the
+      // server holds, and nothing reconciles the two. A server row can go missing on its own: a
+      // half-failed turn-off, a restored database. It happened, and the board went on showing
+      // notifications as on for hours with nothing behind them. Registering again is an upsert
+      // keyed on the endpoint, so this costs one request and also covers a rotated endpoint.
+      try {
+        await register(subscription)
+      } catch {
+        // Nothing to say. The switch already reflects the browser, and the next load tries again.
+      }
+    }
   })
+
+  async function register(subscription: PushSubscription): Promise<void> {
+    const json = subscription.toJSON()
+    await subscribeToPush(subscription.endpoint, json.keys!.p256dh, json.keys!.auth)
+  }
 
   async function enable() {
     busy = true
@@ -44,8 +63,7 @@
         applicationServerKey: base64UrlToBytes(await getPushKey()),
       })
 
-      const json = subscription.toJSON()
-      await subscribeToPush(subscription.endpoint, json.keys!.p256dh, json.keys!.auth)
+      await register(subscription)
       enabled = true
       onEnabledChange(true)
     } catch {
@@ -63,8 +81,12 @@
       const registration = await navigator.serviceWorker.ready
       const subscription = await registration.pushManager.getSubscription()
       if (subscription) {
-        await unsubscribeFromPush(subscription.endpoint)
+        // Browser first, deliberately. If the second call then fails, the server is left holding
+        // an endpoint that no longer accepts anything, which clears itself on the next send when
+        // the push service answers 410. The other order leaves a live browser subscription the
+        // server has forgotten, which nothing detects and nothing repairs.
         await subscription.unsubscribe()
+        await unsubscribeFromPush(subscription.endpoint)
       }
       enabled = false
       onEnabledChange(false)

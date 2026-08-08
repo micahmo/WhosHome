@@ -413,6 +413,34 @@ The state is called `Nearby` in code and shown as "Near home" wherever a person 
 alone invites the reader to think it means near *them*, wherever they are, when everything here is
 measured from home.
 
+### The switch and the subscription can disagree
+
+A subscription has two halves that live in different places. The browser holds one, the
+`Subscriptions` table holds the other, and delivery needs both. Nothing in the UI reads the server
+half: the switch reflects `pushManager.getSubscription()`, and the per-person bells are preference
+rows that exist whether or not anything can be delivered. So a server that has forgotten a device
+looks exactly like a working one, from every screen.
+
+That is not hypothetical. A row went missing between 12:19 and 20:02 one day, and the board went on
+showing notifications switched on and every bell lit while nothing could arrive. It cost four
+announcements before anyone noticed, and only because the arrivals home were expected and did not
+come.
+
+Two changes, because a state that cannot be observed has to be made impossible instead:
+
+- The board re-registers its subscription on every load. `POST /api/push/subscribe` is an upsert
+  keyed on the endpoint, so it is cheap, and it repairs both a missing row and an endpoint the
+  browser has rotated.
+- Turning notifications off unsubscribes the browser first and tells the server second. A failure
+  between the two then leaves the server holding a dead endpoint, which the existing 410 handler
+  clears on the next send. The other order leaves a live browser subscription the server has
+  forgotten, which is the unobservable state again.
+
+Both halves are logged now. Every position report was logged and subscriptions were not, which is
+why the original disappearance is undatable: there is no reverse proxy in front of this and
+cloudflared does not log paths, so the application log is the only record there was ever going to
+be.
+
 ## Endpoints
 
 | Endpoint | Auth | Purpose |

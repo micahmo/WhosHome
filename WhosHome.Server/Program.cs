@@ -251,11 +251,15 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
 // design and identifies this server to the push service.
 app.MapGet("/api/push/key", (VapidKeys keys) => Results.Ok(new { publicKey = keys.PublicKey }));
 
+// Called on every board load as well as from the switch, because nothing else reconciles the two
+// halves of a subscription: the switch reads the browser, delivery depends on this table, and a
+// server that has lost the row looks identical to a working one from the app.
 app.MapPost("/api/push/subscribe", async (
     ClaimsPrincipal user,
     SubscribeRequest body,
     WhosHomeContext context,
     TimeProvider timeProvider,
+    ILogger<Program> logger,
     CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(body.Endpoint)
@@ -267,18 +271,20 @@ app.MapPost("/api/push/subscribe", async (
 
     int personId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    // Loaded rather than trusted from the claim so the log can name someone, and so a session that
+    // outlived the person it names fails here rather than on the foreign key.
+    Person? person = await context.People
+        .FirstOrDefaultAsync(candidate => candidate.Id == personId, cancellationToken);
+
+    if (person is null)
+    {
+        return Results.NotFound();
+    }
+
     DeviceSubscription? existing = await context.Subscriptions
         .FirstOrDefaultAsync(subscription => subscription.Endpoint == body.Endpoint, cancellationToken);
 
-    if (existing is not null)
-    {
-        // Browsers can hand back the same endpoint with rotated keys, and the person may have
-        // changed if a device was passed on, so refresh rather than duplicate.
-        existing.PersonId = personId;
-        existing.P256dh = body.P256dh;
-        existing.Auth = body.Auth;
-    }
-    else
+    if (existing is null)
     {
         context.Subscriptions.Add(new DeviceSubscription
         {
@@ -288,9 +294,30 @@ app.MapPost("/api/push/subscribe", async (
             Auth = body.Auth,
             CreatedUtc = timeProvider.GetUtcNow(),
         });
+
+        await context.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Registered a push subscription for {Name}.", person.Name);
+        return Results.NoContent();
     }
 
+    // Browsers can hand back the same endpoint with rotated keys, and the person may have
+    // changed if a device was passed on, so refresh rather than duplicate.
+    bool changed = existing.PersonId != personId
+        || existing.P256dh != body.P256dh
+        || existing.Auth != body.Auth;
+
+    existing.PersonId = personId;
+    existing.P256dh = body.P256dh;
+    existing.Auth = body.Auth;
     await context.SaveChangesAsync(cancellationToken);
+
+    // Re-registering on load means the ordinary outcome is that nothing changed. Logging that too
+    // would bury the times something did.
+    if (changed)
+    {
+        logger.LogInformation("Refreshed the push subscription for {Name}.", person.Name);
+    }
+
     return Results.NoContent();
 }).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
 
@@ -298,14 +325,29 @@ app.MapPost("/api/push/subscribe", async (
 app.MapDelete("/api/push/subscribe", async (
     [FromBody] UnsubscribeRequest body,
     WhosHomeContext context,
+    ILogger<Program> logger,
     CancellationToken cancellationToken) =>
 {
-    if (!string.IsNullOrWhiteSpace(body.Endpoint))
+    if (string.IsNullOrWhiteSpace(body.Endpoint))
     {
-        await context.Subscriptions
-            .Where(subscription => subscription.Endpoint == body.Endpoint)
-            .ExecuteDeleteAsync(cancellationToken);
+        return Results.NoContent();
     }
+
+    // Loaded rather than deleted in place so the log can name who stopped hearing about people. A
+    // subscription going away is the one event here that otherwise leaves no trace at all: the
+    // switch reads the browser rather than this table, so the app cannot notice it has gone.
+    DeviceSubscription? existing = await context.Subscriptions
+        .Include(subscription => subscription.Person)
+        .FirstOrDefaultAsync(subscription => subscription.Endpoint == body.Endpoint, cancellationToken);
+
+    if (existing is null)
+    {
+        return Results.NoContent();
+    }
+
+    context.Subscriptions.Remove(existing);
+    await context.SaveChangesAsync(cancellationToken);
+    logger.LogInformation("Removed the push subscription for {Name}.", existing.Person?.Name);
 
     return Results.NoContent();
 }).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
