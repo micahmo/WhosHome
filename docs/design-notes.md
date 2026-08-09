@@ -99,6 +99,51 @@ claimed a fresh stop for a car that had been parked five and a half hours. A deb
 that number by two minutes. Knowing when a stop began that we did not witness is a different
 problem.
 
+### Running out of evidence is not the same as stopping
+
+A dwell is claimed only when the latest report itself said the device was not moving. Not when
+`isMoving` is false, which also happens when a movement claim simply ages out. Those look alike in
+code and are different facts: one is a device saying it has stopped, the other is us running out of
+evidence.
+
+The difference is visible because a phone with no signal keeps taking fixes and queues them, so the
+answer arrives later and can be checked against what the board was saying at the time. One evening
+two phones went quiet at 26.9 km doing 19.5 m/s. Their backlog, flushed 44 minutes later, held the
+fixes they had taken meanwhile:
+
+```
+18:53   26.9 km    last fix that reached the server
+18:58   23.5 km
+19:03   20.3 km
+19:27   20.0 km    only 300 m in 24 minutes, so a genuine stop began around here
+19:32   16.7 km
+19:37   12.5 km    signal back, whole backlog uploaded at once
+```
+
+They were driving for ten minutes after the board began saying "Stopped". Then they did stop, but
+20 km from home rather than the 26.9 km still on the card, and the duration was counted from a
+timestamp nine minutes before it happened. That timestamp is the stop-clock anchor, which mid-journey
+means "the last time they travelled `MovementThresholdMeters`" — a moment of known motion, narrated
+as the moment they stopped.
+
+The objection is that iOS goes quiet the instant someone stops, so the last fix of a journey is
+disproportionately one taken while still rolling, and suppressing the dwell there loses the number in
+the common case rather than the rare one. Two iPhones arriving home at 7.1 m/s and going quiet for
+twelve hours would lose "Home for 759 minutes".
+
+The numbers answer it. That dwell was 759 minutes and their last position was 760 minutes old. When
+the last report said moving, the anchor was necessarily reset by that same journey, so the duration
+can only ever be the length of the silence — which the age line already states, without claiming to
+know the reason for it. What is lost is a near-duplicate.
+
+The case where a duration carries real information is the other one, and it is untouched: a phone
+reports arrival at 0 m/s, then heartbeats from the same spot for eight hours. "Home for 8 hours"
+against a contact age of three minutes are entirely different numbers, and both are earned.
+
+One consequence worth knowing: a stale card keeps its "Arrived at" only if the last report said
+stopped. Where the last report said moving, there is no arrival to date, and the card falls back to
+position and age alone.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is

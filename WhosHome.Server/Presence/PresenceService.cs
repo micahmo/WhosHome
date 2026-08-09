@@ -195,10 +195,15 @@ public class PresenceService(
         bool dwellHasHeld = person.StationarySinceUtc is not null
             && now - person.StationarySinceUtc.Value >= _options.DwellDebounce;
 
-        // Suppressed while moving, where it would describe a place someone has already left. Stale
-        // cards keep theirs: where they settled and when stays true whatever happened after we
-        // stopped hearing from them, and the UI shows the arrival time rather than a running count.
-        DateTimeOffset? dwellSince = isMoving || !dwellHasHeld ? null : person.StationarySinceUtc;
+        // Gated on what the last report said rather than on isMoving, which also goes false when a
+        // movement claim simply ages out. Those are different facts: one is a device saying it has
+        // stopped, the other is us running out of evidence. Only the first is grounds for saying
+        // anyone stopped, or for dating it. A phone with no signal keeps taking fixes and queues
+        // them, so from here it is indistinguishable from a parked car, and the anchor it would be
+        // dated from is the last time they travelled rather than the moment they stopped.
+        DateTimeOffset? dwellSince = movingWhenLastSeen || !dwellHasHeld
+            ? null
+            : person.StationarySinceUtc;
 
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside.
