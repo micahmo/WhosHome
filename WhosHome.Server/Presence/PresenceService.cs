@@ -53,7 +53,7 @@ public class PresenceService(
         // backlog delivers several positions in the same second, and distance over interval then
         // works out at thousands of metres per second.
         double? effectiveSpeed = speedMetersPerSecond ?? ComputeSpeed(movedMeters, person.LastFixUtc, now);
-        bool isMoving = IsMoving(effectiveSpeed, movedMeters);
+        bool isMoving = IsMoving(effectiveSpeed, movedMeters, accuracyMeters);
 
         // Measured from where the clock started, not from the previous fix. Consecutive fixes while
         // driving are only tens of metres apart, so a per-fix comparison never fires however far the
@@ -184,7 +184,10 @@ public class PresenceService(
         // Movement expires, because it describes this moment and is read off a report that may be
         // old. Measured from the report rather than from last contact, since a check-in carries no
         // position and so says nothing about whether anyone is still going anywhere.
-        bool movingWhenLastSeen = IsMoving(latest.SpeedMetersPerSecond, latest.MovedMeters);
+        bool movingWhenLastSeen = IsMoving(
+            latest.SpeedMetersPerSecond,
+            latest.MovedMeters,
+            latest.AccuracyMeters);
         bool isMoving = movingWhenLastSeen
             && now - latest.ReceivedUtc <= _options.MovingClaimLifetime;
 
@@ -231,9 +234,25 @@ public class PresenceService(
     /// moves under a hundred metres per fix, which is less than the noise floor a stationary phone
     /// produces over five minutes. Raw distance survives only for the first fix after a gap, where
     /// there is no interval to divide by.
+    /// <para>
+    /// Distance does get one job: vetoing a speed its own position contradicts.
+    /// </para>
     /// </summary>
-    private bool IsMoving(double? speedMetersPerSecond, double? movedMeters)
+    private bool IsMoving(double? speedMetersPerSecond, double? movedMeters, double? accuracyMeters)
     {
+        // A fix that went no further than its own margin of error has not established that anything
+        // moved, so nothing it claims about speed is worth acting on. The platform's speed field has
+        // been wrong in both directions: 0.01 m/s from a phone accelerating away from the house, and
+        // 21.89 m/s from one parked overnight that had moved a single metre on a 3 m fix. Only the
+        // second is caught here, and only because the position contradicted it outright.
+        //
+        // Real travel never trips this. Driving steps are 75 to 90 m against 2 to 10 m of accuracy,
+        // two orders of magnitude clear of the test.
+        if (movedMeters is not null && accuracyMeters is not null && movedMeters < accuracyMeters)
+        {
+            return false;
+        }
+
         if (speedMetersPerSecond is not null)
         {
             return speedMetersPerSecond > _options.MovingSpeedMetersPerSecond;

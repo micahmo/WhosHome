@@ -48,6 +48,28 @@ flushes its backlog in one burst, several positions carrying the same arrival se
 interval then produces nonsense: one such flush computed to 645 m/s on one row and 92,627 m/s on the
 next, from a genuine drive at 28 m/s.
 
+The field is also plainly wrong sometimes, in both directions, so distance gets one job after all:
+vetoing a speed its own position contradicts. A fix that travelled less than its own stated accuracy
+has not established that anything moved, and nothing it claims about speed is worth acting on. Two
+readings from the same pair of phones, a day apart:
+
+| Reported speed | Moved | Accuracy | What was actually happening |
+| --- | --- | --- | --- |
+| 0.01 m/s | 286 m | 32 m | driving away from the house on the first fix after waking |
+| 21.89 m/s | 1 m | 3 m | parked at home overnight |
+
+Only the second is caught, and only because the position contradicts it outright. The first has
+displacement two hundred times its accuracy, so nothing about it is self-contradictory; that one is
+handled by the debounce below instead. Real travel never trips the veto — driving steps are 75 to
+90 m against 2 to 10 m of accuracy.
+
+The 21.89 m/s reading is what motivated this. On its own it was harmless, but combined with the rule
+that a dwell is only claimed when the last report said stopped, it erased the arrival line from a
+stale card: the phone had been home for thirteen hours and its card could no longer say so, because
+one garbage number said it was doing 49 mph. The other phone beside it, whose last fix read 0.00 m/s,
+displayed correctly. Same situation, different card, decided by a field neither of them can be
+trusted to fill in.
+
 `MovingSpeedMetersPerSecond` sits above a brisk walk rather than just above a stroll, because a phone
 at rest has been seen reporting 2 m/s and a lower bar flickers the label on nothing. Walking therefore
 does not register as travelling, which suits a board about whether someone is on their way.
