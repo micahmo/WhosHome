@@ -185,10 +185,28 @@ position and age alone.
 
 ### Except when the device says it stopped
 
-There is one piece of evidence that does settle it, and it arrives on its own. The client only sends
-a check-in once its own stop detection has fired, so a check-in landing *after* the last position is
-the device stating it has parked since. `LastCheckInUtc > latest.ReceivedUtc` therefore clears the
-movement claim and restores the dwell, dated from the anchor, which is the arrival.
+There is one piece of evidence that does settle it, and it arrives on its own. The client checks in
+once its own stop detection has fired, so a check-in landing well after the last position is the
+device stating it has parked since. That clears the movement claim and restores the dwell, dated
+from the anchor, which is the arrival.
+
+"Well after" is load bearing, and getting it wrong shipped a bug. A waking iPhone sends a heartbeat
+and a position in the same breath, and the heartbeat can land second:
+
+```
+[11:26:01] Report from Alaina: 134 m from home, Home to Home
+[11:26:01] Heartbeat from Alaina.
+```
+
+That fix read 9.26 m/s. Reading the trailing heartbeat as a stop took "On the move" off a card that
+had just earned it. So the gap has to exceed `MovingClaimLifetime`, which states the rule properly:
+a check-in speaks for the time after we stopped believing a fix, never against one we still believe.
+
+Worth recording how that got through. The same pairing appears all over these logs — 12:08:25,
+13:05:38, 14:33:14, 18:38:42 — and each was noted at the time as evidence that the iOS heartbeat
+only fires when the app wakes for something else. The observation was right there and was never
+connected to the rule being built on top of it. The test that catches it now asserts the assumption
+rather than the symptom, which is the kind the first pass of the suite was missing.
 
 Without it the rule above is badly wrong for the commonest day on Android. Stop detection means the
 final fix of a journey is usually taken while still rolling — a real one read 5.59 m/s pulling into

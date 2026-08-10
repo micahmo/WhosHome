@@ -202,6 +202,28 @@ public class PresenceScenarios
     }
 
     [Fact]
+    public async Task A_check_in_in_the_same_breath_as_a_moving_fix_proves_nothing()
+    {
+        // A waking iPhone sends a heartbeat and a position together. Observed: both logged in the
+        // same second while its owner drove at 9.26 m/s, which cleared the movement claim and put
+        // a stopped card on the board. A check-in speaks for the time after a fix stops being
+        // believed, never against one still fresh.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(50, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(10));
+        await harness.FixAsync(300, speedMetersPerSecond: 9.26, accuracyMeters: 10);
+
+        harness.Advance(TimeSpan.FromSeconds(1));
+        await harness.CheckInAsync();
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.True(view.IsMoving);
+        Assert.Null(view.StationarySeconds);
+    }
+
+    [Fact]
     public async Task A_fix_rejected_for_poor_accuracy_is_not_a_check_in()
     {
         // It proves the device is alive and nothing else. A phone can answer with a cell tower

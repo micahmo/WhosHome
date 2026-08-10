@@ -204,12 +204,20 @@ public class PresenceService(
             latest.MovedMeters,
             latest.AccuracyMeters);
 
-        // The client only checks in once its own stop detection has fired, so one arriving after
-        // the last position is the device saying it has parked since. That is the missing evidence
+        // The client checks in once its own stop detection has fired, so one arriving well after the
+        // last position is the device saying it has parked since. That is the missing evidence
         // wherever the final fix of a journey was taken while still rolling, which with stop
         // detection is most of them: the next position may not arrive until they leave again, so
         // without this an ordinary day at work has no dwell on it at all.
-        bool checkedInSinceLastFix = person.LastCheckInUtc > latest.ReceivedUtc;
+        //
+        // "Well after" rather than merely after, because a waking iPhone sends a heartbeat and a
+        // position in the same breath, and the heartbeat can land second. One did so while its
+        // owner drove at 9.26 m/s, and reading it as a stop took "On the move" off a card that had
+        // just earned it. Requiring the gap to exceed the movement claim's own lifetime says what
+        // is actually meant: a check-in speaks for the time after we stopped believing the fix,
+        // never against a fix we still believe.
+        bool checkedInSinceLastFix =
+            person.LastCheckInUtc > latest.ReceivedUtc + _options.MovingClaimLifetime;
 
         bool isMoving = movingWhenLastSeen
             && !checkedInSinceLastFix
