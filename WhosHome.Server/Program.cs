@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using System.Threading.RateLimiting;
 using Lib.Net.Http.WebPush;
 using Microsoft.AspNetCore.Authentication;
@@ -64,6 +66,7 @@ Directory.CreateDirectory(databaseDirectory);
 builder.Services.AddDbContext<WhosHomeContext>(dbContextOptions =>
     dbContextOptions.UseSqlite($"Data Source={databasePath}"));
 builder.Services.AddScoped<PresenceService>();
+builder.Services.AddSingleton<PresenceBroadcaster>();
 builder.Services.AddHostedService<RetentionService>();
 
 // Web push needs a stable VAPID keypair. Generated on first run and kept on the volume, because
@@ -166,6 +169,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     WhosHomeContext context,
     PresenceService presence,
     PresenceNotifier notifier,
+    PresenceBroadcaster broadcaster,
     IOptions<WhosHomeOptions> options,
     TimeProvider timeProvider,
     ILogger<Program> logger,
@@ -194,6 +198,9 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     if (report!.IsHeartbeat)
     {
         await presence.RecordCheckInAsync(person, cancellationToken);
+        // A check-in changes the age on a card and can clear a stale warning, so it is worth
+        // pushing even though no position moved.
+        broadcaster.Signal();
 
         // Logged at information alongside positions, not at debug. Whether heartbeats arrive is
         // the one thing that cannot be reconstructed afterwards: they write no report row, and
@@ -209,6 +216,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     if (report.AccuracyMeters > ingestOptions.MaxAccuracyMeters)
     {
         await presence.RecordContactAsync(person, cancellationToken);
+        broadcaster.Signal();
         logger.LogInformation(
             "Ignored an imprecise fix from {Name}: accurate to {Accuracy:F0} m against a {Limit:F0} m limit.",
             person.Name,
@@ -227,6 +235,9 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         report.SpeedMetersPerSecond,
         report.IsCharging,
         cancellationToken);
+
+    // Before the notification, so an open board is never behind the phone that buzzed.
+    broadcaster.Signal();
 
     logger.LogInformation(
         "Report from {Name}: {Distance:F0} m from home, {Previous} to {Current}, device clock {Reported:o}.",
@@ -554,6 +565,68 @@ app.MapGet("/api/presence", async (
 
     IReadOnlyList<PresenceView> views = await presence.GetPresenceAsync(cancellationToken);
     return Results.Ok(views);
+});
+
+// The same board, pushed. Polling put an arrival on screen up to a refresh interval after the phone
+// reported it, which is most of the delay a household ever notices. The poll stays as the safety
+// net and as what keeps the ages on the cards ticking; this only removes the wait.
+app.MapGet("/api/presence/stream", async (
+    HttpContext httpContext,
+    IOptions<WhosHomeOptions> options,
+    PresenceBroadcaster broadcaster,
+    IServiceScopeFactory scopeFactory,
+    CancellationToken cancellationToken) =>
+{
+    AuthenticateResult member = await httpContext.AuthenticateAsync(AuthSchemes.Member);
+    if (!member.Succeeded && !await AdminAccess.IsAdminAsync(httpContext, options.Value))
+    {
+        return Results.Unauthorized();
+    }
+
+    httpContext.Response.Headers.ContentType = "text/event-stream";
+    httpContext.Response.Headers.CacheControl = "no-cache";
+    // A hint to reverse proxies that buffer by default. Nothing in this deployment reads it, but a
+    // buffered event stream arrives in clumps or not at all, and the header costs nothing.
+    httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+
+    (Guid id, ChannelReader<byte> reader) = broadcaster.Subscribe();
+
+    try
+    {
+        // Immediately, so a client that has just connected is never behind the board it replaced.
+        await WriteBoardAsync(httpContext, scopeFactory, cancellationToken);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            using CancellationTokenSource keepalive =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            keepalive.CancelAfter(PresenceStream.Keepalive);
+
+            try
+            {
+                await reader.ReadAsync(keepalive.Token);
+                await WriteBoardAsync(httpContext, scopeFactory, cancellationToken);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Nothing happened for a while. A comment is not delivered to the page, but it puts
+                // bytes through the connection so an idle timeout somewhere in the middle cannot
+                // quietly close it while the household is asleep.
+                await httpContext.Response.WriteAsync(": ping\n\n", cancellationToken);
+                await httpContext.Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        // The page was closed or navigated away. The ordinary end of one of these.
+    }
+    finally
+    {
+        broadcaster.Unsubscribe(id);
+    }
+
+    return Results.Empty;
 });
 
 // ---- Household management, admin only ----
@@ -915,6 +988,44 @@ static async Task<IReadOnlyDictionary<string, string?>> ReadValuesAsync(HttpRequ
     }
 
     return values;
+}
+
+/// <summary>
+/// Writes the whole board as one event. The same shape <c>/api/presence</c> returns, so the client
+/// has one parser and one code path regardless of how the data reached it.
+/// </summary>
+static async Task WriteBoardAsync(
+    HttpContext httpContext,
+    IServiceScopeFactory scopeFactory,
+    CancellationToken cancellationToken)
+{
+    // A scope per snapshot rather than one for the connection. These live for hours, and a scoped
+    // DbContext held that long would pin a pooled connection the whole time for the sake of a query
+    // that runs every few minutes.
+    using IServiceScope scope = scopeFactory.CreateScope();
+    PresenceService presence = scope.ServiceProvider.GetRequiredService<PresenceService>();
+    IReadOnlyList<PresenceView> views = await presence.GetPresenceAsync(cancellationToken);
+
+    string payload = JsonSerializer.Serialize(views, PresenceStream.Json);
+    await httpContext.Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
+    await httpContext.Response.Body.FlushAsync(cancellationToken);
+}
+
+/// <summary>Settings for the event stream, kept in one place so both ends agree.</summary>
+static class PresenceStream
+{
+    /// <summary>How long a quiet connection waits before a comment is sent down it. Short enough to
+    /// beat the idle timeouts of anything likely to sit in the middle.</summary>
+    public static readonly TimeSpan Keepalive = TimeSpan.FromSeconds(20);
+
+    /// <summary>Matches what <c>Results.Ok</c> produces, so the stream and the polled endpoint
+    /// deliver identical JSON and the client cannot tell them apart. The enum converter is the part
+    /// that matters: without it states arrive as integers here and as names there, and the board
+    /// would render whichever route delivered it differently.</summary>
+    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 }
 
 public record CreatePersonRequest(string Name);

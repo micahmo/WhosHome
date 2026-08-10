@@ -35,6 +35,9 @@
   // server and flip the bell back under the person's finger.
   let togglesInFlight = 0
 
+  // Not $state: nothing renders from it, and the connection is plumbing rather than UI.
+  let stream: EventSource | null = null
+
   // Admins can read the board without being a person, so the machine used for provisioning
   // does not have to register itself as a household member just to look.
   let canView = $derived(session !== null || admin)
@@ -44,12 +47,16 @@
 
     // Refresh on a timer, and again on focus, because iOS reloads a home screen app from
     // scratch after eviction and a stale board is the most likely thing to be looking at.
+    // The timer stays even with the stream connected: it is the fallback when the stream cannot
+    // be established, and it is also what keeps the ages on the cards moving, since those are
+    // computed by the server and only change when the board is fetched again.
     const timer = setInterval(refresh, refreshIntervalMs)
     window.addEventListener('focus', refresh)
 
     return () => {
       clearInterval(timer)
       window.removeEventListener('focus', refresh)
+      stream?.close()
     }
   })
 
@@ -61,8 +68,47 @@
       // on the one browser most likely to be both.
       admin = await isAdmin()
       await refresh()
+      connect()
     } finally {
       starting = false
+    }
+  }
+
+  /**
+   * Listens for changes instead of waiting for the next poll. Cookies go with an EventSource
+   * automatically, so this needs no auth of its own, and the browser handles reconnection.
+   *
+   * Deliberately not treated as required. Anything that fails here leaves the poll in charge and
+   * nothing on screen says so, because a board half a minute behind is not worth a warning.
+   */
+  function connect() {
+    if (!canView || stream !== null || typeof EventSource === 'undefined') {
+      return
+    }
+
+    stream = new EventSource('/api/presence/stream')
+
+    stream.onmessage = (event) => {
+      // Ignored mid-toggle for the same reason the poll is: it would overwrite the optimistic bell.
+      if (togglesInFlight > 0) {
+        return
+      }
+
+      try {
+        people = JSON.parse(event.data)
+        error = ''
+      } catch {
+        // A truncated frame is not worth acting on. The next one, or the poll, will be whole.
+      }
+    }
+
+    stream.onerror = () => {
+      // The browser retries on its own unless it has given up, which it does for a 401 or a wrong
+      // content type. Dropping the reference in that case lets a later refresh try again from
+      // scratch rather than leaving a dead object behind.
+      if (stream?.readyState === EventSource.CLOSED) {
+        stream = null
+      }
     }
   }
 
@@ -88,6 +134,10 @@
     if (pushEnabled && togglesInFlight === 0) {
       await loadPreferences()
     }
+
+    // Cheap when one is already open. This is how a stream the browser gave up on comes back:
+    // the poll keeps working regardless, and each poll is another chance to reconnect.
+    connect()
   }
 
   async function loadPreferences() {
@@ -130,6 +180,7 @@
   async function onSignedIn(next: Session) {
     session = next
     await refresh()
+    connect()
   }
 
   async function leave() {
@@ -137,6 +188,8 @@
     session = null
     people = []
     preferences = []
+    stream?.close()
+    stream = null
   }
 </script>
 

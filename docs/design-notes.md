@@ -575,6 +575,38 @@ why the original disappearance is undatable: there is no reverse proxy in front 
 cloudflared does not log paths, so the application log is the only record there was ever going to
 be.
 
+## Pushing the board instead of waiting for it
+
+The board polled every 30 seconds, so an arrival could sit on a phone for half a minute before it
+appeared. The symptom that makes it obvious: the notification about someone getting home arrives
+before the card saying so, from the same event, because push is immediate and the board was not.
+
+Server-sent events rather than WebSockets. The traffic is one-way, `EventSource` reconnects by
+itself, and it is ordinary HTTP so the existing cookie carries the auth with no token plumbing. A
+return channel would have been machinery with nothing to carry.
+
+Three things about the design are deliberate:
+
+**The signal carries no payload.** `PresenceBroadcaster` wakes listeners and nothing more, and each
+listener then reads current state for itself. A connection busy writing therefore cannot fall behind
+and start serving a queue of increasingly old snapshots. The channel is bounded at one and drops
+writes, so a phone flushing forty buffered reports wakes each connection once, and the single read
+that follows already reflects all forty.
+
+**A scope per snapshot, not per connection.** These connections live for hours. `PresenceService`
+and its `DbContext` are scoped, so holding one for the connection would pin a pooled database
+connection all that time for a query that runs every few minutes.
+
+**The poll stays.** It is the fallback when the stream cannot be established, and it is also what
+keeps the ages on the cards moving: those are computed server-side, so without a periodic refetch a
+quiet board would freeze at "2 minutes ago" indefinitely.
+
+The stream serializes with its own options, which must include the string enum converter. Without it
+states arrive as integers on one route and as names on the other, and the board renders differently
+depending on which delivered the data. Measured end to end on a real page: a report reached the DOM
+236 ms after it was posted, against up to 30 seconds before. A `: ping` comment goes down every
+20 seconds so an idle proxy cannot quietly close a connection overnight.
+
 ## Telling the app it is out of date
 
 A page left open keeps running the bundle it loaded with, and this one is built to be left open for
@@ -606,6 +638,7 @@ reports the page as hidden and the check silently does nothing, which looks exac
 | --- | --- | --- |
 | `GET`/`POST` `/ingest` | device id | OsmAnd protocol receiver |
 | `GET` `/api/presence` | member or admin | The board |
+| `GET` `/api/presence/stream` | member or admin | The same board, pushed as it changes |
 | `POST` `/api/session` | sign-in code | Start a session |
 | `GET` `/api/session` | member | Who am I |
 | `DELETE` `/api/session` | none | Sign out |
