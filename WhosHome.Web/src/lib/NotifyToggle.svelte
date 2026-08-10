@@ -74,6 +74,14 @@
   }
 
   async function disable() {
+    // Asked because this is a one tap, silent, and easily missed way to switch the whole thing off,
+    // and it sits at the bottom of the board where a scroll can land on it. It has happened twice,
+    // and both times the first sign was an arrival that never got announced hours later. Nothing
+    // records what pressed it, so the only useful place to intervene is before it happens.
+    if (!confirm('Turn off notifications on this device? You will stop hearing when anyone arrives or leaves.')) {
+      return
+    }
+
     busy = true
     error = ''
 
