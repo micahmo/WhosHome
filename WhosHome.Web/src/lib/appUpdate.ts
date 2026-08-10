@@ -44,16 +44,19 @@ export function watchForUpdate(onReady: () => void, intervalMs = 300_000): void 
     return
   }
 
-  let announced = false
+  // Which build was announced, rather than merely whether one was. Someone who dismisses the
+  // prompt has said "not now" about that build, not "never tell me again", and on a page left open
+  // for days a second deploy deserves to be mentioned as much as the first did.
+  let announcedFor: string | null = null
 
   const check = async () => {
-    if (announced || document.visibilityState !== 'visible') {
+    if (document.visibilityState !== 'visible') {
       return
     }
 
     const deployed = await deployedBundle()
-    if (deployed !== null && deployed !== running) {
-      announced = true
+    if (deployed !== null && deployed !== running && deployed !== announcedFor) {
+      announcedFor = deployed
       onReady()
     }
   }

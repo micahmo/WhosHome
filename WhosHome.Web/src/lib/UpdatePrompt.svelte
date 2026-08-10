@@ -26,6 +26,8 @@
     <button onclick={reload} disabled={applying}>
       {applying ? 'Updating...' : 'Reload'}
     </button>
+    <!-- Because the alternative is a bar across the bottom of the board until you give in. -->
+    <button class="dismiss" onclick={() => (ready = false)} aria-label="Dismiss">&times;</button>
   </div>
 {/if}
 
@@ -62,5 +64,15 @@
 
   button:disabled {
     opacity: 0.5;
+  }
+
+  .dismiss {
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+    font-weight: 400;
   }
 </style>
