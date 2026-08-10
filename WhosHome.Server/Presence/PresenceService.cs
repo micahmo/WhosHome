@@ -66,7 +66,14 @@ public class PresenceService(
                 person.StationaryLatitude.Value,
                 person.StationaryLongitude.Value);
 
-        bool hasRelocated = metersFromAnchor > _options.MovementThresholdMeters;
+        // The gap has to clear the threshold by more than the fix's own margin of error, or a bad
+        // reading relocates someone who never moved. A phone sitting indoors drifted across a 143 m
+        // band on fixes accurate to 100 m, and one landed far enough from the anchor to restart the
+        // clock and discard two hours and eleven minutes of real dwell. A fix that cannot resolve
+        // 200 m has no business deciding whether 200 m happened: the same reasoning as the speed
+        // veto further down, applied to distance rather than to speed.
+        bool hasRelocated =
+            metersFromAnchor > _options.MovementThresholdMeters + (accuracyMeters ?? 0);
 
         // Relocating restarts the clock; moving does not. Speed says what someone is doing this
         // instant, and a single reading is a poor reason to rewrite how long they have been

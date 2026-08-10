@@ -311,6 +311,25 @@ public class PresenceScenarios
     // ---- The stop clock ----
 
     [Fact]
+    public async Task A_fix_too_vague_to_resolve_the_threshold_does_not_restart_the_stop_clock()
+    {
+        // A phone sitting indoors at work drifted across a 143 m band on fixes accurate to 100 m.
+        // One of them read far enough from the anchor to restart the clock, throwing away two hours
+        // and eleven minutes of genuine dwell and reporting the owner as newly arrived.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(32_700, speedMetersPerSecond: 0, accuracyMeters: 12);
+        harness.Advance(TimeSpan.FromHours(2));
+
+        // 250 m from the anchor, which clears the 200 m threshold, on a fix that cannot resolve it.
+        await harness.FixAsync(32_950, speedMetersPerSecond: 0.43, accuracyMeters: 100);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(TimeSpan.FromHours(2).TotalSeconds, view.StationarySeconds!.Value, precision: 0);
+    }
+
+    [Fact]
     public async Task Relocating_restarts_the_stop_clock_but_moving_on_the_spot_does_not()
     {
         // A phone lying still indoors reported 2 m/s and discarded a clock that had legitimately

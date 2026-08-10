@@ -34,6 +34,14 @@ and discarded a clock that had legitimately been running for forty minutes: the 
 3 min" for someone who had been home since before dinner. Where you are is durable, what you are doing
 this second is not.
 
+The gap must also beat the fix's own margin of error, not just the threshold. A phone sitting
+indoors at work drifted across a 143 m band on fixes accurate to 100 m, and one of them landed far
+enough from the anchor to restart the clock. It discarded two hours and eleven minutes of real
+dwell and reported its owner as newly arrived where he had been all morning. `MaxAccuracyMeters` is
+250, so a 100 m fix is well within what we accept, and rightly — it is fine for deciding someone is
+32 km from home. It is not fine for deciding they moved 200 m. Same reasoning as the speed veto
+below, applied to distance: a fix that cannot resolve the question has no vote on the answer.
+
 Comparing each fix against the previous one instead does not work. While driving, Traccar reports
 every few seconds, so consecutive fixes are only 75 to 90 metres apart, well under any threshold that
 survives GPS noise. A phone can travel 32 km without a single pair of fixes looking like movement.
