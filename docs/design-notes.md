@@ -628,8 +628,15 @@ It is also correctly scoped by accident. A change that compiles to identical out
 alone, so a comment-only edit raises no prompt — verified by trying it. Nothing to update, nothing
 said.
 
-Checks run on returning to the app and on a timer, both gated on `document.visibilityState`, so a
-backgrounded phone does not poll. That gate is worth remembering when testing: an automation browser
+A timer is a poor way to learn this, though, and the event stream gives a much better one. A deploy
+takes the container down, which drops every open stream, and the browser reconnects a few seconds
+later against the new build. So a stream reopening is the earliest evidence available that the
+server changed, and the check runs there. Measured end to end: the prompt appeared 1.5 seconds after
+the server came back, against a five minute worst case on the timer alone. The first open is
+skipped, being nothing more than the page loading.
+
+Checks also run on returning to the app and on a timer, both gated on `document.visibilityState`, so
+a backgrounded phone does not poll. Those remain the fallback for when the stream cannot connect. That gate is worth remembering when testing: an automation browser
 reports the page as hidden and the check silently does nothing, which looks exactly like a bug.
 
 ## Endpoints

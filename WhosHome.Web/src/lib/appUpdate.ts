@@ -58,7 +58,21 @@ export function watchForUpdate(onReady: () => void, intervalMs = 300_000): void 
     }
   }
 
+  armed = check
   document.addEventListener('visibilitychange', () => void check())
   window.setInterval(() => void check(), intervalMs)
   void check()
+}
+
+let armed: (() => Promise<void>) | null = null
+
+/**
+ * Checks straight away rather than waiting for the timer.
+ *
+ * For callers that know something about the server has changed. A deploy takes the container down,
+ * which drops every event stream, so a stream reconnecting is the earliest evidence available that
+ * a new build might be serving — much earlier than any interval worth polling on.
+ */
+export function checkForUpdateNow(): void {
+  void armed?.()
 }

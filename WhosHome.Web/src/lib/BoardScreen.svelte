@@ -10,6 +10,7 @@
     signOut,
   } from './api'
   import type { NotificationPreference, PresenceView, Session } from './types'
+  import { checkForUpdateNow } from './appUpdate'
   import Board from './Board.svelte'
   import Login from './Login.svelte'
   import InstallPrompt from './InstallPrompt.svelte'
@@ -37,6 +38,7 @@
 
   // Not $state: nothing renders from it, and the connection is plumbing rather than UI.
   let stream: EventSource | null = null
+  let streamHasOpened = false
 
   // Admins can read the board without being a person, so the machine used for provisioning
   // does not have to register itself as a household member just to look.
@@ -87,6 +89,18 @@
     }
 
     stream = new EventSource('/api/presence/stream')
+
+    stream.onopen = () => {
+      // A deploy takes the server down, so every stream drops and reopens against the new build a
+      // few seconds later. That makes a reopen the earliest possible sign a new version is being
+      // served, and far better than waiting out an interval. The first open is just this page
+      // loading and has nothing to say.
+      if (streamHasOpened) {
+        checkForUpdateNow()
+      }
+
+      streamHasOpened = true
+    }
 
     stream.onmessage = (event) => {
       // Ignored mid-toggle for the same reason the poll is: it would overwrite the optimistic bell.
