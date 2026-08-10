@@ -575,6 +575,31 @@ why the original disappearance is undatable: there is no reverse proxy in front 
 cloudflared does not log paths, so the application log is the only record there was ever going to
 be.
 
+## Telling the app it is out of date
+
+A page left open keeps running the bundle it loaded with, and this one is built to be left open for
+days: the screen is held awake so the board can be watched. So a deploy needs to announce itself.
+
+The usual way is the service worker — listen for `updatefound`, prompt, `skipWaiting`, reload. It
+does not work here, and the reason is worth writing down because the code looks correct. A browser
+only installs a new worker when `sw.js` itself changes, byte for byte. Ours lives in `public/`,
+which Vite copies verbatim, and it names no bundles because it caches at runtime rather than from a
+precache manifest. So it is identical between deploys and `updatefound` never fires. Tooling like
+`vite-plugin-pwa` avoids this by generating a hashed manifest inside the worker; we have no such
+manifest to generate.
+
+What does change on every build is the hashed script name Vite writes into `index.html`. The check
+is therefore to fetch `index.html` and compare its module script against the one this page is
+running, read from its own script tag. No server support and no build step.
+
+It is also correctly scoped by accident. A change that compiles to identical output leaves the hash
+alone, so a comment-only edit raises no prompt — verified by trying it. Nothing to update, nothing
+said.
+
+Checks run on returning to the app and on a timer, both gated on `document.visibilityState`, so a
+backgrounded phone does not poll. That gate is worth remembering when testing: an automation browser
+reports the page as hidden and the check silently does nothing, which looks exactly like a bug.
+
 ## Endpoints
 
 | Endpoint | Auth | Purpose |
