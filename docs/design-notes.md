@@ -3,6 +3,23 @@
 Why the parts that are not obvious are built the way they are. Almost every entry here exists
 because something behaved unexpectedly first, and the note is the reason not to undo the fix.
 
+## Keep the scenarios executable
+
+Everything below about deciding presence has a matching test in `WhosHome.Tests`, and that is a
+standing requirement rather than a one-off. When a new edge case turns up, add it there as well as
+here: the note explains why the rule exists, and the test is what stops the next rule from quietly
+undoing it.
+
+This matters more than usual because the rules interact. They look like separate patches and are
+not: each one covers a different position we can be in relative to the evidence. A fix contradicting
+itself, one fix being too little to conclude anything, having no evidence at all, and being handed
+evidence we were not using. A change made for one of those routinely lands on another. It has
+already happened once, a day apart, and only became obvious because the second case was a phone
+belonging to someone who checked.
+
+So the bar for a new rule is that all the old scenarios still pass, and that the new one joins them.
+They run in about two seconds and CI runs them before publishing anything.
+
 ## Deciding whether someone is moving
 
 Two separate questions get confused easily, and they need different answers.

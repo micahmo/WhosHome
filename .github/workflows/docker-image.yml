@@ -14,6 +14,16 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
+    # Tests run before anything is published. They encode the presence scenarios that have actually
+    # happened, so a rule added for one of them cannot quietly undo another.
+    - name: Set up .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Test
+      run: dotnet test WhosHome.Tests/WhosHome.Tests.csproj
+
     # Build
     - name: Build image
       run: |

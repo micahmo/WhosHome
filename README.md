@@ -175,6 +175,15 @@ Simulate a phone without one:
 curl "http://localhost:5199/ingest?id=<deviceId>&lat=42.5876&lon=-71.8140&accuracy=9"
 ```
 
+```bash
+dotnet test WhosHome.Tests/WhosHome.Tests.csproj
+```
+
+The tests are scenarios rather than units: a phone waking up and misreporting its speed, a car
+losing signal mid-journey, an arrival taken while still rolling into a car park. Every one of them
+is something that happened and produced a wrong card, so run them after any change to how presence
+is decided. CI runs them before it publishes an image.
+
 [docs/design-notes.md](docs/design-notes.md) covers the API surface, the logging format, and the
 reasoning behind the parts that are not obvious.
 

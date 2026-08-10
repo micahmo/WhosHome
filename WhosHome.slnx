@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="WhosHome.Server/WhosHome.Server.csproj" />
+  <Project Path="WhosHome.Tests/WhosHome.Tests.csproj" />
 </Solution>
