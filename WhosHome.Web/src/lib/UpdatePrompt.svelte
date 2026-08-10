@@ -22,9 +22,9 @@
 {#if ready}
   <!-- Polite rather than assertive: worth noticing, never worth interrupting someone mid-read. -->
   <div class="toast" role="status">
-    <span>A new version is ready.</span>
+    <span>Who's Home has been updated.</span>
     <button onclick={reload} disabled={applying}>
-      {applying ? 'Updating...' : 'Reload'}
+      {applying ? 'Refreshing...' : 'Refresh'}
     </button>
     <!-- Because the alternative is a bar across the bottom of the board until you give in. -->
     <button class="dismiss" onclick={() => (ready = false)} aria-label="Dismiss">&times;</button>
@@ -34,8 +34,14 @@
 <style>
   .toast {
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
+    /* Anchored to both edges and centred with auto margins rather than left: 50% and a transform.
+       A fixed element sizes itself against the space from its offsets to the edge, so left: 50%
+       leaves it half the viewport to fit in, and the text wraps while the box still looks like it
+       has room to spare. */
+    left: 0;
+    right: 0;
+    width: fit-content;
+    margin: 0 auto;
     bottom: calc(1rem + env(safe-area-inset-bottom));
     z-index: 10;
 
