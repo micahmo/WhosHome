@@ -115,11 +115,26 @@ public class PresenceService(
     }
 
     /// <summary>
-    /// Records contact without a position. With stop detection enabled the client goes quiet while
-    /// stationary, so these are the only thing separating a parked phone from a lost one. No report
-    /// row is written, because nothing about the position has changed.
+    /// Records a check-in: the client saying it is alive and, because it only sends these once its
+    /// own stop detection has fired, that it has stopped. With stop detection enabled a stationary
+    /// phone goes quiet, so these are the only thing separating a parked phone from a lost one.
+    /// No report row is written, because nothing about the position has changed.
     /// </summary>
-    public async Task RecordHeartbeatAsync(Person person, CancellationToken cancellationToken)
+    public async Task RecordCheckInAsync(Person person, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(person);
+
+        person.LastCheckInUtc = timeProvider.GetUtcNow();
+        await RecordContactAsync(person, cancellationToken);
+    }
+
+    /// <summary>
+    /// Records contact and nothing more, for a fix too imprecise to place anyone. It proves the
+    /// device is alive, which is all a check-in proves too, but unlike a check-in it says nothing
+    /// about whether the device has stopped: a phone can answer with a cell-tower estimate at any
+    /// point in a journey.
+    /// </summary>
+    public async Task RecordContactAsync(Person person, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(person);
 
@@ -188,7 +203,16 @@ public class PresenceService(
             latest.SpeedMetersPerSecond,
             latest.MovedMeters,
             latest.AccuracyMeters);
+
+        // The client only checks in once its own stop detection has fired, so one arriving after
+        // the last position is the device saying it has parked since. That is the missing evidence
+        // wherever the final fix of a journey was taken while still rolling, which with stop
+        // detection is most of them: the next position may not arrive until they leave again, so
+        // without this an ordinary day at work has no dwell on it at all.
+        bool checkedInSinceLastFix = person.LastCheckInUtc > latest.ReceivedUtc;
+
         bool isMoving = movingWhenLastSeen
+            && !checkedInSinceLastFix
             && now - latest.ReceivedUtc <= _options.MovingClaimLifetime;
 
         // A stop is not worth describing until it has held. The anchor resets all through a journey,
@@ -204,7 +228,7 @@ public class PresenceService(
         // anyone stopped, or for dating it. A phone with no signal keeps taking fixes and queues
         // them, so from here it is indistinguishable from a parked car, and the anchor it would be
         // dated from is the last time they travelled rather than the moment they stopped.
-        DateTimeOffset? dwellSince = movingWhenLastSeen || !dwellHasHeld
+        DateTimeOffset? dwellSince = (movingWhenLastSeen && !checkedInSinceLastFix) || !dwellHasHeld
             ? null
             : person.StationarySinceUtc;
 

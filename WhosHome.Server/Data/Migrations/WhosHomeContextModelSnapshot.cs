@@ -90,6 +90,9 @@ namespace WhosHome.Server.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("LastCheckInUtc")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long?>("LastFixUtc")
                         .HasColumnType("INTEGER");
 

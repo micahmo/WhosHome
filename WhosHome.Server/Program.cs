@@ -193,7 +193,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     // contact is what stops a stationary phone from looking like a lost one.
     if (report!.IsHeartbeat)
     {
-        await presence.RecordHeartbeatAsync(person, cancellationToken);
+        await presence.RecordCheckInAsync(person, cancellationToken);
 
         // Logged at information alongside positions, not at debug. Whether heartbeats arrive is
         // the one thing that cannot be reconstructed afterwards: they write no report row, and
@@ -208,7 +208,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
     WhosHomeOptions ingestOptions = options.Value;
     if (report.AccuracyMeters > ingestOptions.MaxAccuracyMeters)
     {
-        await presence.RecordHeartbeatAsync(person, cancellationToken);
+        await presence.RecordContactAsync(person, cancellationToken);
         logger.LogInformation(
             "Ignored an imprecise fix from {Name}: accurate to {Accuracy:F0} m against a {Limit:F0} m limit.",
             person.Name,

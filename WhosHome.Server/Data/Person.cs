@@ -52,6 +52,19 @@ public class Person
     /// </summary>
     public DateTimeOffset? LastSeenUtc { get; set; }
 
+    /// <summary>
+    /// The last time the device checked in without a position, which is a stronger statement than
+    /// <see cref="LastSeenUtc"/>. The client only sends these while its own stop detection says it
+    /// has stopped, so one arriving after the last fix is the device telling us it has parked.
+    /// <para>
+    /// Tracked separately because a fix rejected for poor accuracy is also recorded as contact and
+    /// also moves <see cref="LastSeenUtc"/>, while saying nothing at all about whether anyone
+    /// stopped. Reading that as a stop would manufacture exactly the false claim the rest of this
+    /// works to avoid.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? LastCheckInUtc { get; set; }
+
     /// <summary>When this person last settled in one spot, measuring the current stop rather than
     /// the time since they were last seen.</summary>
     public DateTimeOffset? StationarySinceUtc { get; set; }

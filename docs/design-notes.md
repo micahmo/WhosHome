@@ -166,6 +166,30 @@ One consequence worth knowing: a stale card keeps its "Arrived at" only if the l
 stopped. Where the last report said moving, there is no arrival to date, and the card falls back to
 position and age alone.
 
+### Except when the device says it stopped
+
+There is one piece of evidence that does settle it, and it arrives on its own. The client only sends
+a check-in once its own stop detection has fired, so a check-in landing *after* the last position is
+the device stating it has parked since. `LastCheckInUtc > latest.ReceivedUtc` therefore clears the
+movement claim and restores the dwell, dated from the anchor, which is the arrival.
+
+Without it the rule above is badly wrong for the commonest day on Android. Stop detection means the
+final fix of a journey is usually taken while still rolling — a real one read 5.59 m/s pulling into
+a car park — and no further position arrives until the owner leaves again. So an entire day at work
+would carry no duration at all.
+
+That case also exposes a flaw in the reasoning above. "The duration is a near-duplicate of the age"
+holds on iPhones, where a silent phone's age and dwell advance together. On Android they diverge
+completely: heartbeats keep the age at fifteen minutes all day while the position stays pinned at
+the morning arrival, so the dwell is the only thing that would say how long someone has been
+somewhere. The 759-versus-760-minute comparison that justified the rule came from iPhone data, and
+does not generalise.
+
+`LastCheckInUtc` is deliberately not `LastSeenUtc`. A fix rejected for poor accuracy is recorded as
+contact too, and moves `LastSeenUtc`, while proving nothing about whether anyone stopped: a phone can
+answer with a cell-tower estimate at any point in a journey, and one did so mid-drive. Reusing the
+existing field would let a bad reading manufacture precisely the stop this section exists to prevent.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is
