@@ -110,7 +110,10 @@
           {/if}
           {#if person.travelSeconds !== null}
             {#if moving || (settled && person.state !== 'Home')}<span class="sep">&middot;</span>{/if}
-            {formatTravel(person.travelSeconds)}
+            <!-- The "~" says this estimate is carried from an earlier fix at the same spot, because the
+                 latest one could not be routed. Honest about what we could and could not calculate,
+                 and short-lived, since a fix that routes replaces it. -->
+            {person.travelEstimateHeld ? '~' : ''}{formatTravel(person.travelSeconds)}
           {/if}
         </p>
       {/if}

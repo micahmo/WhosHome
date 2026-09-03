@@ -395,6 +395,33 @@ After a failure, routing pauses for `OsrmFailureCooldown`. That must comfortably
 between reports, or the cooldown expires before the next one arrives and every report pays the
 timeout anyway.
 
+### Carrying the estimate through a fix that could not be routed
+
+The estimate is display only and comes and goes with whether a fix could be routed, so one
+snap-rejected fix should not blank it while nothing about where the person is has changed. When the
+newest fix has no route but an earlier one taken at the same stop does, the card shows that earlier
+estimate, marked with a leading `~` so a held number is never passed off as a fresh one.
+
+The bound is the stop, not a distance. Distance from home is a radius, and two places the same
+distance out drive home differently, so "they have not left this spot" is the only thing that keeps a
+carried estimate true. `StationarySinceUtc` already resets the instant someone relocates, so a report
+taken at or after it was taken here; the moment they drive off, none qualifies and either a fresh
+on-road fix routes or the estimate honestly disappears. A second bound of `StaleAfter` stops an
+ancient estimate outliving the card's own claim to be current, and the whole thing is skipped at
+home, where routing never runs and a just-cleared away route would otherwise print `~3 min away` on
+someone sitting in the house.
+
+The reading behind it: the same phone parked 68 m from an unnamed service road, its fixes scattering
+past the snap limit, so the "36 min away" line flickered off and on. Raising the snap limit makes that
+rare; this makes the residual invisible.
+
+Not built, and worth reaching for only if it ever bites: taking an estimate from the minute or two
+before the stop as well, to cover the moment the final rolling fix of a journey snap-rejects and the
+phone then goes silent, which can leave a just-parked iPhone with no estimate until it moves again. It
+is the same shape as the isolated-speed-spike watch-item and deferred for the same reason: reaching
+back before the anchor is the only version that can attach an estimate across a place it cannot prove,
+so it waits for a real reading rather than a supposed one.
+
 ## Sessions
 
 `GET /api/admin/session` is a question, not a protected resource, so it always answers 200 with

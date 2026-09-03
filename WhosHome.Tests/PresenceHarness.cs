@@ -128,6 +128,19 @@ internal sealed class PresenceHarness : IAsyncDisposable
         return Service.RecordContactAsync(Person, CancellationToken.None);
     }
 
+    /// <summary>Stamps a drive-home estimate onto the most recent report, standing in for a fix OSRM
+    /// routed. Routing is off in these tests, so every stored report otherwise has no travel time and
+    /// the carry-forward would have nothing to carry.</summary>
+    public async Task RouteLastFixAsync(double travelSeconds, double travelMeters)
+    {
+        PositionReport latest = await _context.Reports
+            .OrderByDescending(report => report.ReceivedUtc)
+            .FirstAsync();
+        latest.TravelSeconds = travelSeconds;
+        latest.TravelMeters = travelMeters;
+        await _context.SaveChangesAsync();
+    }
+
     public void Advance(TimeSpan amount)
     {
         Clock.Advance(amount);

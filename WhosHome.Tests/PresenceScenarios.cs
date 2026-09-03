@@ -355,4 +355,82 @@ public class PresenceScenarios
             relocated.StationarySeconds!.Value,
             precision: 0);
     }
+
+    // ---- Carrying a drive-home estimate through an unrouteable fix ----
+    // A phone parked 68 m from an unnamed service road produced fixes whose scatter crossed the snap
+    // limit, so the "36 min away" line flickered off and on. While it has not left the spot, the last
+    // estimate taken there is still true, so it is carried and marked.
+
+    [Fact]
+    public async Task A_parked_fix_that_cannot_be_routed_keeps_the_estimate_from_one_that_could()
+    {
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        // Parked 30 km out. The first fix sets the anchor, and stands in for one OSRM could route.
+        await harness.FixAsync(30_000, speedMetersPerSecond: 0);
+        await harness.RouteLastFixAsync(travelSeconds: 2160, travelMeters: 34_000);
+        harness.Advance(harness.Options.DwellDebounce + TimeSpan.FromMinutes(1));
+        // Same spot, but this fix snapped too far from a road to route.
+        await harness.FixAsync(30_030, speedMetersPerSecond: 0);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(2160, view.TravelSeconds);
+        Assert.True(view.TravelEstimateHeld);
+    }
+
+    [Fact]
+    public async Task An_estimate_is_not_carried_once_the_stop_it_belonged_to_is_left()
+    {
+        // The assumption the carry rests on: the estimate is only valid while they are in the spot it
+        // was taken at. Distance from home is a radius, so the guard is the anchor, not the distance.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(30_000, speedMetersPerSecond: 0);
+        await harness.RouteLastFixAsync(travelSeconds: 2160, travelMeters: 34_000);
+        harness.Advance(TimeSpan.FromMinutes(3));
+        // Moved five km. The relocation resets the anchor, so the earlier estimate no longer applies.
+        await harness.FixAsync(35_000, speedMetersPerSecond: 20);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Null(view.TravelSeconds);
+        Assert.False(view.TravelEstimateHeld);
+    }
+
+    [Fact]
+    public async Task A_carried_estimate_is_dropped_once_it_is_older_than_the_stale_window()
+    {
+        // The second bound: a held estimate must not outlive the card's own claim to be current.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(30_000, speedMetersPerSecond: 0);
+        await harness.RouteLastFixAsync(travelSeconds: 2160, travelMeters: 34_000);
+        harness.Advance(harness.Options.StaleAfter + TimeSpan.FromMinutes(5));
+        await harness.FixAsync(30_030, speedMetersPerSecond: 0);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Null(view.TravelSeconds);
+        Assert.False(view.TravelEstimateHeld);
+    }
+
+    [Fact]
+    public async Task No_estimate_is_carried_onto_someone_who_is_home()
+    {
+        // Routing is skipped at home, so a home fix always lacks a route. Without the home guard a
+        // just-cleared away estimate would print a drive time on someone sitting in the house.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(30_000, speedMetersPerSecond: 15);
+        await harness.RouteLastFixAsync(travelSeconds: 2160, travelMeters: 34_000);
+        harness.Advance(TimeSpan.FromMinutes(3));
+        await harness.FixAsync(50, speedMetersPerSecond: 0);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(PresenceState.Home, view.State);
+        Assert.Null(view.TravelSeconds);
+        Assert.False(view.TravelEstimateHeld);
+    }
 }

@@ -15,6 +15,9 @@ export interface PresenceView {
   travelSeconds: number | null
   /** Driving distance home. Shown in preference to `distanceMeters`; null falls back to it. */
   travelMeters: number | null
+  /** `travelSeconds` is carried from an earlier fix at the same stop, not the latest one, because
+   * the latest could not be routed. Shown with a leading "~". */
+  travelEstimateHeld: boolean
   /** The latest fix showed real movement rather than GPS drift. */
   isMoving: boolean
   /** How long they have been in one spot. Null while moving. */

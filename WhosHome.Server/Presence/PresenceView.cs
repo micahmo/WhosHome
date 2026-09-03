@@ -27,6 +27,11 @@ public sealed record PresenceView
     /// it decides nothing.</summary>
     public double? TravelMeters { get; init; }
 
+    /// <summary>True when <see cref="TravelSeconds"/> is not from the latest fix but carried from an
+    /// earlier one taken at the same stop, because the latest fix could not be routed. The card marks
+    /// it with a leading "~", so a held estimate is never shown as a fresh one.</summary>
+    public bool TravelEstimateHeld { get; init; }
+
     /// <summary>True when the latest fix showed real movement rather than GPS drift.</summary>
     public required bool IsMoving { get; init; }
 

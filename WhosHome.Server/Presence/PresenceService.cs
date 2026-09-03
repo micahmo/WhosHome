@@ -174,13 +174,64 @@ public class PresenceService(
                 .OrderByDescending(report => report.ReceivedUtc)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            views.Add(BuildView(person, latest, now));
+            double? heldTravelSeconds = await HeldTravelSecondsAsync(person, latest, now, cancellationToken);
+
+            views.Add(BuildView(person, latest, heldTravelSeconds, now));
         }
 
         return views;
     }
 
-    private PresenceView BuildView(Person person, PositionReport? latest, DateTimeOffset now)
+    /// <summary>
+    /// The drive-home estimate carried from an earlier fix, for when the newest one has none because
+    /// its coordinate snapped too far from any road to trust. Nothing about where the person is has
+    /// changed, so while they are still at the same stop the last estimate taken there is still true.
+    /// Null when there is nothing worth carrying, in which case the card simply shows distance.
+    ///
+    /// Bounded to the current anchor, not to a distance from home: distance from home is a radius,
+    /// and two places the same distance out have different drives, so only "they have not left this
+    /// spot" keeps the estimate honest. <see cref="Person.StationarySinceUtc"/> resets the instant
+    /// they relocate, so any report taken at or after it was taken here. Bounded again to
+    /// <see cref="WhosHomeOptions.StaleAfter"/>, past which the card stops asserting anything current
+    /// anyway. Skipped at home, where routing never runs, or a just-cleared away route would print a
+    /// drive time on someone sitting in the house.
+    /// </summary>
+    private async Task<double?> HeldTravelSecondsAsync(
+        Person person,
+        PositionReport? latest,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (latest is null
+            || latest.TravelSeconds is not null
+            || person.StationarySinceUtc is null
+            || Classify(latest.DistanceMeters) == PresenceState.Home)
+        {
+            return null;
+        }
+
+        DateTimeOffset anchor = person.StationarySinceUtc.Value;
+        PositionReport? lastRouted = await context.Reports
+            .AsNoTracking()
+            .Where(report => report.PersonId == person.Id
+                && report.TravelSeconds != null
+                && report.ReceivedUtc >= anchor)
+            .OrderByDescending(report => report.ReceivedUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (lastRouted is null || now - lastRouted.ReceivedUtc > _options.StaleAfter)
+        {
+            return null;
+        }
+
+        return lastRouted.TravelSeconds;
+    }
+
+    private PresenceView BuildView(
+        Person person,
+        PositionReport? latest,
+        double? heldTravelSeconds,
+        DateTimeOffset now)
     {
         if (latest is null)
         {
@@ -255,8 +306,9 @@ public class PresenceService(
             Name = person.Name,
             State = Classify(latest.DistanceMeters),
             DistanceMeters = latest.DistanceMeters,
-            TravelSeconds = latest.TravelSeconds,
+            TravelSeconds = latest.TravelSeconds ?? heldTravelSeconds,
             TravelMeters = latest.TravelMeters,
+            TravelEstimateHeld = latest.TravelSeconds is null && heldTravelSeconds is not null,
             IsMoving = isMoving,
             StationarySeconds = dwellSince is null ? null : (now - dwellSince.Value).TotalSeconds,
             StationarySinceUtc = dwellSince,
