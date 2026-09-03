@@ -346,8 +346,14 @@ A Los Angeles coordinate against a US Northeast extract comes back as a confiden
 the status code is not the success condition: a route is trusted only when every waypoint snapped
 within `OsrmMaxSnapMeters`.
 
-That check earns its keep in ordinary use too. A position 421 metres from the nearest road, in a
-field near home, was correctly discarded rather than shown as a plausible-looking route.
+The limit is 1000 m, set generously on purpose. Its real job is catching the out-of-extract
+fabrications above, and those miss by a country: the Los Angeles fix snapped 3.4 million metres. A
+legitimately off-road position misses by hundreds. An earlier 250 m was tight enough to discard a
+field 421 m from the nearest road, but it also blanked ordinary parked cars: a phone stopped 68 m
+from an unnamed service road produced fixes whose GPS scatter crossed 250 m, so the drive-home line
+flickered off and on as individual fixes were accepted or rejected. For a number that decides
+nothing, a coordinate up to a kilometre from a road still gives a usable estimate, and the
+fabrications the check exists to reject are three orders of magnitude further out.
 
 Coordinates are formatted to six decimal places on the way out. This is not tidiness: OSRM answers
 `{"code":"InvalidQuery"}` for a coordinate carrying a double's full precision.
@@ -360,9 +366,9 @@ result was that people read as near home while still nearly three miles of drivi
 
 Measured rather than guessed, by fanning sample points out in eighteen directions from one household
 at a range of straight-line distances and asking OSRM to drive each of them home. Points whose
-nearest road lay beyond `OsrmMaxSnapMeters` were discarded, so the sample contains only positions the
-app itself would have trusted a route for. From 306 accepted samples, the straight-line distance
-equivalent to two driving miles came out as:
+nearest road lay beyond `OsrmMaxSnapMeters`, then 250 m, were discarded, so the sample contains only
+positions the app itself would have trusted a route for. From 306 accepted samples, the straight-line
+distance equivalent to two driving miles came out as:
 
 | | straight-line miles | metres |
 | --- | --- | --- |

@@ -118,8 +118,13 @@ public class WhosHomeOptions
     /// <summary>How far OSRM may snap a coordinate to a road before the answer is treated as
     /// meaningless. OSRM returns a confident route for points far outside its extract by snapping
     /// them hundreds of kilometres, so this is the real check on whether a route is about the
-    /// place we asked about.</summary>
-    public double OsrmMaxSnapMeters { get; set; } = 250;
+    /// place we asked about. Set generously: the fabrications it must reject miss by a country (a
+    /// Los Angeles fix against this extract snapped 3.4 million metres), while a legitimately
+    /// off-road position misses by hundreds. An earlier 250 blanked ordinary stops, one of them a
+    /// phone parked 68 m from an unnamed service road whose GPS scatter pushed individual fixes past
+    /// 250 m, dropping the drive-home estimate for a display that only ever wanted a rounded minute
+    /// count.</summary>
+    public double OsrmMaxSnapMeters { get; set; } = 1000;
 
     /// <summary>How long to wait on OSRM before giving up. Short, because this runs inline with
     /// an incoming position report and travel time is only enrichment. A local OSRM answers in
