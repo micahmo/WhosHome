@@ -1,4 +1,4 @@
-# <img src="WhosHome.Web/public/icon-192.png" alt="" height="32" align="middle" /> Who's Home
+# <img src="WhosHome.Web/public/icon-192.png" alt="" height="32" align="absmiddle" /> Who's Home
 
 A presence board for a household. It tells you who is home, who is close by, and who is far away,
 without showing anyone's location.
