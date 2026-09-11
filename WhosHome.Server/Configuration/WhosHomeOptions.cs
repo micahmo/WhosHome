@@ -111,6 +111,17 @@ public class WhosHomeOptions
     /// whoever operates the server if it misbehaves.</summary>
     public string VapidSubject { get; set; } = "mailto:admin@localhost";
 
+    /// <summary>How long a subscription may go acknowledged nothing while being pushed to before it
+    /// is treated as dead and dropped. Measured as the gap between the last push a push service
+    /// accepted and the last one a service worker acknowledged, so it only counts against a
+    /// subscription we were actually trying to reach. Set long on purpose: a push service keeps
+    /// accepting messages for a reinstalled or uninstalled app, so this is the only thing that
+    /// removes the orphan, but the cost of being wrong is deleting a real device that was merely off
+    /// for a stretch, and that only happens if it is off this entire span while household events
+    /// keep firing. Even then it is self-healing, since the board re-registers on the next load.
+    /// Conservative for now; it can be tightened once real acknowledgement gaps are measured.</summary>
+    public TimeSpan SubscriptionDeadAfter { get; set; } = TimeSpan.FromDays(30);
+
     /// <summary>Base URL of a self-hosted OSRM instance, for example http://172.18.0.74:5000.
     /// Leave unset to skip travel times entirely and show straight-line distance only.</summary>
     public string? OsrmBaseUrl { get; set; }

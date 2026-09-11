@@ -39,6 +39,10 @@ public class PresenceNotifier(
             return;
         }
 
+        // A real announcement means pushes are about to go out, which is the moment a dead
+        // subscription would take another one into the void, so it is also the moment to drop it.
+        await PruneUnacknowledgedAsync(cancellationToken);
+
         // Absence of a preference row means the default: hear about everyone except yourself.
         Dictionary<int, bool> preferences = await context.NotificationPreferences
             .AsNoTracking()
@@ -79,6 +83,41 @@ public class PresenceNotifier(
         {
             await SendAsync(recipient, message, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Drops subscriptions we have kept pushing to for longer than
+    /// <see cref="WhosHomeOptions.SubscriptionDeadAfter"/> without a single acknowledgement. A
+    /// reinstalled or uninstalled app leaves an endpoint the push service still accepts, so delivery
+    /// success never removes it and the 410 handler never fires; the silence of its service worker is
+    /// the only evidence it is gone. The gap is measured push-to-ack rather than against the clock,
+    /// so a subscription in a household that simply had a quiet month is left alone: nothing was
+    /// pushed to it to have gone unacknowledged. Filtered in memory because the packed-timestamp
+    /// value converter has no SQL for the difference of two of them, and a household is a handful of
+    /// rows.
+    /// </summary>
+    public async Task PruneUnacknowledgedAsync(CancellationToken cancellationToken)
+    {
+        List<int> dead = (await context.Subscriptions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken))
+            .Where(subscription =>
+                subscription.LastPushUtc - subscription.LastAckUtc > _options.SubscriptionDeadAfter)
+            .Select(subscription => subscription.Id)
+            .ToList();
+
+        if (dead.Count == 0)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Dropping {Count} push subscription(s) unacknowledged for over {Days:F0} days.",
+            dead.Count,
+            _options.SubscriptionDeadAfter.TotalDays);
+        await context.Subscriptions
+            .Where(subscription => dead.Contains(subscription.Id))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <summary>

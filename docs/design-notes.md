@@ -634,11 +634,22 @@ one. A living install keeps them level. A dead one lets `LastPushUtc` pull ahead
 grows while we are actually pushing, so a household that simply had a quiet fortnight never accrues
 one.
 
-Shipped as recording only. The prune that will act on the gap is deliberately not built yet: the
-right threshold is a question about real device behaviour, how long a genuinely live worker can go
-between receiving a push and acknowledging it across sleep, offline stretches and iOS throttling, and
-that is worth measuring against real gaps before turning it into a rule that deletes people's
-notifications.
+The prune drops a subscription once that gap passes `SubscriptionDeadAfter`, checked whenever an
+announcement is about to send, since that is the moment a dead one would take another push into the
+void. The threshold is deliberately generous, thirty days to start. Its whole job is out-of-reach
+orphans, whose gap grows without bound, so any sane value catches them; what the value has to clear
+is the other direction, the longest a genuinely live worker legitimately goes unacknowledged across
+sleep, dead zones and iOS throttling. Set it too tight and a real phone that was simply off for a
+while gets deleted. Even that is not fatal, because the board re-registers on the next load, but it is
+still worth avoiding, so the number starts high and can come down once real gaps are measured. The
+right threshold is a question about device behaviour rather than a thing to guess precisely, and an
+orphan lingering a few extra weeks costs only a duplicate push per event in the meantime.
+
+The check is the gap between two recorded times, never the wall clock, which is what keeps a quiet
+household safe: a subscription nobody has had reason to push to has no gap to accrue, however old its
+last acknowledgement. A live worker that has been asleep or offline closes the gap the moment it comes
+back and answers the queued push, so only a subscription that stays silent through an entire window of
+announcements it was actually sent is taken as gone.
 
 ## Pushing the board instead of waiting for it
 
