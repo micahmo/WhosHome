@@ -34,6 +34,12 @@ namespace WhosHome.Server.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("LastAckUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastPushUtc")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("P256dh")
                         .IsRequired()
                         .HasColumnType("TEXT");

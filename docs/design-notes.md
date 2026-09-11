@@ -608,6 +608,38 @@ why the original disappearance is undatable: there is no reverse proxy in front 
 cloudflared does not log paths, so the application log is the only record there was ever going to
 be.
 
+### Telling a dead subscription from a living one
+
+Reinstalling the app orphans a subscription. A reinstalled PWA is a fresh service worker with a new
+endpoint, and the old row lives on because nothing reports its death: the browser does not reliably
+unsubscribe on uninstall, and the push service keeps returning success for the dead endpoint rather
+than the 410 the cleanup waits for. Seen directly: after one reinstall a person held two Firefox
+subscriptions, the new one delivering and the old one silently taking a duplicate of every push into
+a void, and a push to it still came back 201.
+
+The 410 handler cannot catch this, because 410 never comes. The obvious alternatives do not work
+either. Deduplicating at registration is impossible, because the reinstalled app has no memory of the
+endpoint it replaced, so the server cannot know which existing row the new one supersedes. And a
+staleness rule keyed on the board re-registering itself would delete exactly the subscriptions worth
+keeping: the whole point of the app is that someone can enable notifications and then never open it
+again, so "has not loaded the board lately" is not evidence of a dead subscription, it is the normal
+state of a satisfied user.
+
+The one thing that tracks the subscription rather than the person is the service worker, which runs
+on push receipt whether or not the app is open. So it acknowledges: on every push it shows, it posts
+the endpoint back to `/api/push/ack`, which is anonymous and keyed on the endpoint because the worker
+may run with no session to present. Two timestamps record the two sides. `LastPushUtc` moves when the
+push service accepts a message for a subscription; `LastAckUtc` moves when its worker acknowledges
+one. A living install keeps them level. A dead one lets `LastPushUtc` pull ahead, and the gap only
+grows while we are actually pushing, so a household that simply had a quiet fortnight never accrues
+one.
+
+Shipped as recording only. The prune that will act on the gap is deliberately not built yet: the
+right threshold is a question about real device behaviour, how long a genuinely live worker can go
+between receiving a push and acknowledging it across sleep, offline stretches and iOS throttling, and
+that is worth measuring against real gaps before turning it into a rule that deletes people's
+notifications.
+
 ## Pushing the board instead of waiting for it
 
 The board polled every 30 seconds, so an arrival could sit on a phone for half a minute before it

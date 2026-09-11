@@ -18,6 +18,7 @@ public class PresenceNotifier(
     PushServiceClient pushClient,
     VapidKeys vapidKeys,
     IOptions<WhosHomeOptions> options,
+    TimeProvider timeProvider,
     ILogger<PresenceNotifier> logger)
 {
     private readonly WhosHomeOptions _options = options.Value;
@@ -131,6 +132,14 @@ public class PresenceNotifier(
                     Subject = _options.VapidSubject,
                 },
                 cancellationToken);
+
+            // Accepted by the push service. Record the attempt, so the gap against LastAckUtc is
+            // measured only against pushes a live worker actually had a chance to acknowledge.
+            await context.Subscriptions
+                .Where(s => s.Id == recipient.Id)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(s => s.LastPushUtc, timeProvider.GetUtcNow()),
+                    cancellationToken);
         }
         catch (PushServiceClientException exception)
             when (exception.StatusCode is System.Net.HttpStatusCode.Gone

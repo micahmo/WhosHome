@@ -76,15 +76,38 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "Who's Home", {
-      body: payload.body || '',
-      // Replaces an earlier notification about the same person rather than stacking them up.
-      tag: payload.tag,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-    }),
+    Promise.all([
+      self.registration.showNotification(payload.title || "Who's Home", {
+        body: payload.body || '',
+        // Replaces an earlier notification about the same person rather than stacking them up.
+        tag: payload.tag,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+      }),
+      // Tell the server a living install received this. A push service keeps accepting messages for
+      // an endpoint whose app was uninstalled or reinstalled, so only a running worker acknowledging
+      // proves the subscription is still attached to something. Best effort: losing an ack is
+      // harmless and must never cost the notification.
+      acknowledge(),
+    ]),
   )
 })
+
+async function acknowledge() {
+  try {
+    const subscription = await self.registration.pushManager.getSubscription()
+    if (!subscription) {
+      return
+    }
+    await fetch('/api/push/ack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    })
+  } catch (ackError) {
+    // Recording only, so a failed acknowledgement changes nothing the user sees.
+  }
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()

@@ -297,13 +297,18 @@ app.MapPost("/api/push/subscribe", async (
 
     if (existing is null)
     {
+        DateTimeOffset now = timeProvider.GetUtcNow();
         context.Subscriptions.Add(new DeviceSubscription
         {
             PersonId = personId,
             Endpoint = body.Endpoint,
             P256dh = body.P256dh,
             Auth = body.Auth,
-            CreatedUtc = timeProvider.GetUtcNow(),
+            CreatedUtc = now,
+            // Start the liveness clocks level, so a subscription is never born already looking
+            // overdue for acknowledgement before its first push has even gone out.
+            LastPushUtc = now,
+            LastAckUtc = now,
         });
 
         await context.SaveChangesAsync(cancellationToken);
@@ -362,6 +367,34 @@ app.MapDelete("/api/push/subscribe", async (
 
     return Results.NoContent();
 }).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = AuthSchemes.Member });
+
+// The service worker calls this each time it shows a push, which happens even for someone who never
+// opens the board and lives entirely off notifications. It is the one signal that a subscription is
+// still attached to a living install: a push service keeps accepting messages for an endpoint whose
+// app was uninstalled or reinstalled, so delivery success cannot tell a dead subscription from a
+// live one, only a running worker can. Anonymous and keyed on the endpoint, because the worker may
+// run with no member session to present and the endpoint is already the subscription's secret.
+// Recorded only for now: the prune that will act on the gap between push and acknowledgement waits
+// until this has gathered real data.
+app.MapPost("/api/push/ack", async (
+    AckRequest body,
+    WhosHomeContext context,
+    TimeProvider timeProvider,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(body.Endpoint))
+    {
+        return Results.NoContent();
+    }
+
+    await context.Subscriptions
+        .Where(subscription => subscription.Endpoint == body.Endpoint)
+        .ExecuteUpdateAsync(
+            setters => setters.SetProperty(subscription => subscription.LastAckUtc, timeProvider.GetUtcNow()),
+            cancellationToken);
+
+    return Results.NoContent();
+});
 
 // Who this person hears about. Returns everyone with their current setting so the UI can render
 // a row per person without having to know the default rule.
@@ -1040,5 +1073,7 @@ public record AdminSignInRequest(string? Token);
 public record SubscribeRequest(string? Endpoint, string? P256dh, string? Auth);
 
 public record UnsubscribeRequest(string? Endpoint);
+
+public record AckRequest(string? Endpoint);
 
 public record NotificationPreferenceRequest(bool Enabled);
