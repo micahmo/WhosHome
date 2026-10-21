@@ -251,6 +251,7 @@ app.MapMethods("/ingest", ["GET", "POST"], async (
         person,
         recorded.PreviousState,
         recorded.CurrentState,
+        report.Timestamp,
         cancellationToken);
 
     return Results.Ok();

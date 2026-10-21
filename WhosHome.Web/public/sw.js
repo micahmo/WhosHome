@@ -78,7 +78,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(payload.title || "Who's Home", {
-        body: payload.body || '',
+        body: bodyFor(payload),
         // Replaces an earlier notification about the same person rather than stacking them up.
         tag: payload.tag,
         icon: '/icon-192.png',
@@ -92,6 +92,34 @@ self.addEventListener('push', (event) => {
     ]),
   )
 })
+
+// A phone holds a background push until it wakes, so a notification can surface hours after the
+// event. This runs at the moment it is shown, so it knows how stale it is: a fresh one keeps the
+// natural "Just left home", a late one is dated ("Left home at 2:14 PM") so it never claims
+// something happened just now when it happened this morning. The clock-time stamp Android shows is
+// when the notification was posted, which is correct the other way round, so the two cases together
+// are always right. Two minutes of slack absorbs the skew between this phone's clock and the one
+// that reported.
+const FRESH_MS = 2 * 60 * 1000
+
+function bodyFor(payload) {
+  const eventMs = Number(payload.eventUtc)
+  if (payload.lateBody && eventMs > 0 && Date.now() - eventMs > FRESH_MS) {
+    const time = formatTime(eventMs)
+    if (time) {
+      return `${payload.lateBody} at ${time}`
+    }
+  }
+  return payload.body || ''
+}
+
+function formatTime(ms) {
+  try {
+    return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  } catch (formatError) {
+    return ''
+  }
+}
 
 async function acknowledge() {
   try {

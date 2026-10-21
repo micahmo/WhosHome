@@ -23,12 +23,18 @@ public class PresenceNotifier(
 {
     private readonly WhosHomeOptions _options = options.Value;
 
-    private sealed record Announcement(string Title, string Body);
+    // Body is the wording for a notification that arrives promptly; LateBody is the stem the service
+    // worker dates ("Left home" becomes "Left home at 2:14 PM") when it finds the notification is
+    // being shown well after the event. A phone holds a background push until it wakes, so "Just left
+    // home" routinely surfaces hours late, and only the worker, which runs at the moment it is shown,
+    // knows how stale it is.
+    internal sealed record Announcement(string Title, string Body, string LateBody);
 
     public async Task NotifyAsync(
         Person person,
         PresenceState previousState,
         PresenceState currentState,
+        DateTimeOffset eventUtc,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(person);
@@ -69,6 +75,10 @@ public class PresenceNotifier(
         {
             title = announcement.Title,
             body = announcement.Body,
+            lateBody = announcement.LateBody,
+            // The device's own clock, so a buffered upload dates to when it actually happened rather
+            // than to when we finally heard about it. Milliseconds since the epoch for the worker.
+            eventUtc = eventUtc.ToUnixTimeMilliseconds(),
             tag = $"person-{person.Id}",
         });
 
@@ -126,7 +136,7 @@ public class PresenceNotifier(
     /// arriving on the way in, leaving then gone on the way out. The check order matters, because
     /// leaving home should read as "left" rather than falling through to the outer ring.
     /// </summary>
-    private static Announcement? Describe(string name, PresenceState previous, PresenceState current)
+    internal static Announcement? Describe(string name, PresenceState previous, PresenceState current)
     {
         if (previous == PresenceState.Unknown || current == previous)
         {
@@ -135,21 +145,21 @@ public class PresenceNotifier(
 
         if (current == PresenceState.Home)
         {
-            return new Announcement($"{name} is home", "Just arrived.");
+            return new Announcement($"{name} is home", "Just arrived.", "Arrived home");
         }
 
         if (previous == PresenceState.Home)
         {
-            return new Announcement($"{name} left", "Just left home.");
+            return new Announcement($"{name} left", "Just left home.", "Left home");
         }
 
         if (current == PresenceState.Nearby)
         {
             // "Nearby" would read as near whoever got the notification, wherever they are.
-            return new Announcement($"{name} is near home", "Getting close to home.");
+            return new Announcement($"{name} is near home", "Getting close to home.", "Near home");
         }
 
-        return new Announcement($"{name} is away", "Left the area.");
+        return new Announcement($"{name} is away", "Left the area.", "Left the area");
     }
 
     private async Task SendAsync(
