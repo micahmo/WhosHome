@@ -23,12 +23,10 @@ public class PresenceNotifier(
 {
     private readonly WhosHomeOptions _options = options.Value;
 
-    // Body is the wording for a notification that arrives promptly; LateBody is the stem the service
-    // worker dates ("Left home" becomes "Left home at 2:14 PM") when it finds the notification is
-    // being shown well after the event. A phone holds a background push until it wakes, so "Just left
-    // home" routinely surfaces hours late, and only the worker, which runs at the moment it is shown,
-    // knows how stale it is.
-    internal sealed record Announcement(string Title, string Body, string LateBody);
+    // Body is a stem the service worker always dates ("Left home" becomes "Left home at 2:14 PM."). A
+    // notification can surface hours after the event, and the browser may build it long before it
+    // posts it, so no wording chosen at either moment can safely claim the event was just now.
+    internal sealed record Announcement(string Title, string Body);
 
     public async Task NotifyAsync(
         Person person,
@@ -75,7 +73,6 @@ public class PresenceNotifier(
         {
             title = announcement.Title,
             body = announcement.Body,
-            lateBody = announcement.LateBody,
             // The device's own clock, so a buffered upload dates to when it actually happened rather
             // than to when we finally heard about it. Milliseconds since the epoch for the worker.
             eventUtc = eventUtc.ToUnixTimeMilliseconds(),
@@ -145,21 +142,21 @@ public class PresenceNotifier(
 
         if (current == PresenceState.Home)
         {
-            return new Announcement($"{name} is home", "Just arrived.", "Arrived home");
+            return new Announcement($"{name} is home", "Arrived home");
         }
 
         if (previous == PresenceState.Home)
         {
-            return new Announcement($"{name} left", "Just left home.", "Left home");
+            return new Announcement($"{name} left", "Left home");
         }
 
         if (current == PresenceState.Nearby)
         {
             // "Nearby" would read as near whoever got the notification, wherever they are.
-            return new Announcement($"{name} is near home", "Getting close to home.", "Near home");
+            return new Announcement($"{name} is near home", "Near home");
         }
 
-        return new Announcement($"{name} is away", "Left the area.", "Left the area");
+        return new Announcement($"{name} is away", "Left the area");
     }
 
     private async Task SendAsync(

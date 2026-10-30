@@ -582,26 +582,23 @@ measured from home.
 
 ### A late notification should not claim to be fresh
 
-A phone holds a background push until it wakes, so a notification routinely surfaces on unlock or when
-the app is opened, sometimes hours after the event. "Just left home" arriving at dinner about a
+A notification routinely surfaces hours after the event. "Just left home" arriving at dinner about a
 departure at breakfast is wrong, and the server cannot fix it because it sent the push the instant the
-report landed; the lateness is entirely the OS holding it.
+report landed; the lateness happens on the phone.
 
-Two different kinds of late, which want opposite handling. A push delivered promptly that then sits in
-the tray until you glance at it is already right: Android labels it with how long ago it was posted, so
-"Just left home" next to "3h ago" reads as a departure three hours back. The one that misleads is a
-push *delivered* late: posted now, about an event hours old, which Android labels "now". So the wording
-is dated only in that second case, and the signal that tells the two apart is the gap between the event
-and the moment the notification is shown.
+The first attempt chose the wording at display time: the service worker kept "Just left home" when the
+event was under two minutes old and dated it otherwise. That rested on the worker running when the
+notification is shown, and Firefox on Android breaks it. One morning a 6:02 AM push was built while
+fresh, then not posted until the browser was next opened at 11:27, so it read "Left the area." with an
+Android stamp of "now". None of that morning's pushes were ever acknowledged. No moment the
+code runs is guaranteed to be the moment it is seen.
 
-The service worker is the only thing that runs at that moment, so it decides. The payload carries the
-event's own time, the reporting device's clock, which also dates a buffered upload to when it happened
-rather than to when it was flushed. If that time is more than a couple of minutes behind when the
-worker shows the notification, it swaps the friendly body for a dated one: "Just left home" becomes
-"Left home at 8:14 AM". Fresh ones are untouched. The two-minute slack absorbs the clock difference
-between the phone that reported and the phone that is looking. Deliberately not the notification's own
-`timestamp`, which stays the post time: overriding it to the event time would relabel a promptly
-delivered, late-read notification as hours old and break the case Android already gets right.
+So the body is always dated: the payload carries a stem ("Left home") and the event's own time, and the
+worker shows "Left home at 8:14 AM." The time is the reporting device's clock, which also dates a
+buffered upload to when it happened rather than to when it was flushed, and the worker formats it in the
+viewer's own timezone. This is true whenever the notification appears. Deliberately not the
+notification's own `timestamp`, which stays the post time, so Android's "3h ago" keeps describing the
+notification and the body describes the event.
 
 ### The switch and the subscription can disagree
 

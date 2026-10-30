@@ -93,27 +93,23 @@ self.addEventListener('push', (event) => {
   )
 })
 
-// A phone holds a background push until it wakes, so a notification can surface hours after the
-// event. This runs at the moment it is shown, so it knows how stale it is: a fresh one keeps the
-// natural "Just left home", a late one is dated ("Left home at 2:14 PM") so it never claims
-// something happened just now when it happened this morning. The clock-time stamp Android shows is
-// when the notification was posted, which is correct the other way round, so the two cases together
-// are always right. Two minutes of slack absorbs the skew between this phone's clock and the one
-// that reported.
-const FRESH_MS = 2 * 60 * 1000
-
+// The body is always dated ("Left home at 8:14 AM.") rather than saying "just". A notification can
+// surface hours after the event, and Firefox on Android may build it when the push arrives yet only
+// post it when the browser next opens, so even this worker cannot know when it will be seen. The
+// event's own time is right however late that is.
 function bodyFor(payload) {
-  const eventMs = Number(payload.eventUtc)
-  if (payload.lateBody && eventMs > 0 && Date.now() - eventMs > FRESH_MS) {
-    const time = formatTime(eventMs)
-    if (time) {
-      return `${payload.lateBody} at ${time}`
-    }
+  const stem = payload.body || ''
+  const time = formatTime(Number(payload.eventUtc))
+  if (!stem) {
+    return ''
   }
-  return payload.body || ''
+  return time ? `${stem} at ${time}.` : `${stem}.`
 }
 
 function formatTime(ms) {
+  if (!(ms > 0)) {
+    return ''
+  }
   try {
     return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   } catch (formatError) {
