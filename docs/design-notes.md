@@ -735,6 +735,16 @@ Checks also run on returning to the app and on a timer, both gated on `document.
 a backgrounded phone does not poll. Those remain the fallback for when the stream cannot connect. That gate is worth remembering when testing: an automation browser
 reports the page as hidden and the check silently does nothing, which looks exactly like a bug.
 
+### The worker script is served uncached
+
+When `sw.js` does change, the new worker still has to reach the browser, and a cache in front of the
+server can stop it. Cloudflare caches `.js` by file extension, and with no `Cache-Control` from us it
+kept serving the previous worker after a deploy, for up to its default edge lifetime of a couple of
+hours. The page itself is not cached there and the bundles are content-hashed, so the worker is the
+one file whose name stays the same while its content changes. The server marks it `no-cache`, so
+every cached copy has to check with us before it is used. The browser already bypasses its own HTTP
+cache when checking for a new worker, so this is only about caches in between.
+
 ## Endpoints
 
 | Endpoint | Auth | Purpose |

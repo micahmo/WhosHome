@@ -137,7 +137,19 @@ using (IServiceScope startupScope = app.Services.CreateScope())
 }
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // The service worker keeps one name across deploys, so a cache in front of us (Cloudflare caches
+    // .js by extension) would hand browsers the previous worker for hours after an update. no-cache
+    // makes every copy revalidate here first. Bundles are content-hashed and need nothing.
+    OnPrepareResponse = context =>
+    {
+        if (context.Context.Request.Path == "/sw.js")
+        {
+            context.Context.Response.Headers.CacheControl = "no-cache";
+        }
+    },
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
