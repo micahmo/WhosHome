@@ -196,6 +196,19 @@ public class PresenceNotifier(
             logger.LogInformation("Dropping expired push subscription {Id}.", recipient.Id);
             await context.Subscriptions.Where(s => s.Id == recipient.Id).ExecuteDeleteAsync(cancellationToken);
         }
+        catch (PushServiceClientException exception)
+        {
+            // Refused by the push service. The exception's message is only the status text
+            // ("Forbidden"), while the body carries the service's own reason (Apple's is JSON like
+            // {"reason":"..."}), which is the part that says what to fix. The stack trace says
+            // nothing a rejection needs.
+            logger.LogError(
+                "Push service {Host} refused subscription {Id}: {Status} {Reason}",
+                new Uri(recipient.Endpoint).Host,
+                recipient.Id,
+                (int)exception.StatusCode,
+                string.IsNullOrWhiteSpace(exception.Body) ? exception.Message : exception.Body);
+        }
         catch (Exception exception)
         {
             // A failed notification must never fail the report that triggered it.
