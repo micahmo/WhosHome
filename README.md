@@ -131,8 +131,8 @@ fields empty.
 | `MemberSessionLifetime` | 365 d | Sliding, so regular use never asks anyone to sign in again |
 | `AdminSessionLifetime` | 30 d | Sliding |
 | `SignInAttemptsPerMinute` | 10 | Per client, across member and admin sign-in |
-| `VapidSubject` | `mailto:admin@localhost` | Contact address notification services see |
-| `OsrmMaxSnapMeters` | 250 | How far a position may snap to a road before its route is discarded |
+| `VapidSubject` | `mailto:admin@localhost` | Contact address notification services see. Set a real `https://` URL or `mailto:` address, or iPhones get no notifications |
+| `OsrmMaxSnapMeters` | 1000 | How far a position may snap to a road before its route is discarded |
 | `OsrmTimeout` | 2 s | Routing runs inline with an incoming report |
 | `OsrmFailureCooldown` | 5 min | How long to stop asking after routing fails |
 
