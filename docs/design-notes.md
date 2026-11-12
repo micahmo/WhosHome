@@ -256,6 +256,15 @@ falls back to dwell as before. A quiet phone shows the time of the crossing rath
 duration, the same rule "Arrived" follows: when they left is still known, that they are still out
 is not.
 
+One case withholds the time home. A departure often reaches us as a single fix still inside the
+radius that says "moving", after which an iPhone holds the drive and uploads it later. While the
+movement claim is fresh the card shows "On the move" beside the time home, which is true and an early
+hint that they are leaving. Once the claim expires with nothing heard since, "home for three hours"
+would say they stayed when the last word was that they were going, so the duration is dropped until a
+later fix or check-in settles it. That is how the card behaved when "Home for" was dwell, which
+declines to date a stop after a moving fix for the same reason. Only home is affected: out, the
+departure time stays true however the phone behaves afterwards.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is

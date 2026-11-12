@@ -486,6 +486,51 @@ public class PresenceScenarios
     }
 
     [Fact]
+    public async Task Time_home_is_withheld_once_a_moving_fix_at_home_goes_unanswered()
+    {
+        // How a departure looks from here: one fix as they set off, still inside the radius, then an
+        // iPhone holds the drive until later. After the movement claim expires, "home for three
+        // hours" would be claiming they stayed.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(3_000, speedMetersPerSecond: 15);
+        harness.Advance(TimeSpan.FromMinutes(5));
+        await harness.FixAsync(40, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromHours(3));
+        await harness.FixAsync(120, speedMetersPerSecond: 8, accuracyMeters: 3);
+        harness.Advance(harness.Options.MovingClaimLifetime + TimeSpan.FromMinutes(1));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(PresenceState.Home, view.State);
+        Assert.False(view.IsMoving);
+        Assert.Null(view.CrossedHomeUtc);
+        Assert.Null(view.SinceCrossedHomeSeconds);
+        Assert.Null(view.StationarySeconds);
+    }
+
+    [Fact]
+    public async Task Time_home_returns_once_a_check_in_says_the_phone_stopped()
+    {
+        // The same unanswered moving fix, then the client's stop detection checks in: they were
+        // pacing the house, not leaving, and the arrival time stands.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(3_000, speedMetersPerSecond: 15);
+        harness.Advance(TimeSpan.FromMinutes(5));
+        await harness.FixAsync(40, speedMetersPerSecond: 0);
+        DateTimeOffset arrived = harness.Clock.GetUtcNow();
+        harness.Advance(TimeSpan.FromHours(3));
+        await harness.FixAsync(120, speedMetersPerSecond: 8, accuracyMeters: 3);
+        harness.Advance(harness.Options.MovingClaimLifetime + TimeSpan.FromMinutes(1));
+        await harness.CheckInAsync();
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(arrived, view.CrossedHomeUtc);
+    }
+
+    [Fact]
     public async Task A_buffered_departure_is_dated_when_it_happened()
     {
         // An iPhone recorded every fix of a departure but uploaded none of them for half an hour,

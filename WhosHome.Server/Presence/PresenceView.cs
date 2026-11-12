@@ -49,7 +49,9 @@ public sealed record PresenceView
 
     /// <summary>When they last crossed the home radius: arrival while <see cref="State"/> is home,
     /// departure while it is anything else. Near home and away share one side of the line, so this
-    /// is how long they have been out across both. Null until a crossing has been seen.</summary>
+    /// is how long they have been out across both. Null until a crossing has been seen, and withheld
+    /// at home while the last word from the phone was that it was moving and nothing has settled it
+    /// since, which is what a departure looks like before the phone uploads the drive.</summary>
     public DateTimeOffset? CrossedHomeUtc { get; init; }
 
     /// <summary>Seconds since <see cref="CrossedHomeUtc"/>, computed here for the same reason as

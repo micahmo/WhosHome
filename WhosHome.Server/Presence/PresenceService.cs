@@ -308,6 +308,20 @@ public class PresenceService(
             ? null
             : person.StationarySinceUtc;
 
+        // A fix inside the home radius that said "moving", followed by silence, is how a departure
+        // usually looks from here: an iPhone gets one fix out as they set off, then holds the rest
+        // until the drive is over. While the movement claim is fresh the card says "On the move"
+        // beside the time home, which is honest. Once it expires with nothing heard since, "home
+        // for three hours" would assert they stayed when the last word was that they were going,
+        // so the duration is withheld until a later fix or check-in settles it. Dwell already
+        // declines to date a stop in this situation, so the card is plain "Home" as it was before
+        // the crossing time existed.
+        bool departureUnresolved = Classify(latest.DistanceMeters) == PresenceState.Home
+            && movingWhenLastSeen
+            && !checkedInSinceLastFix
+            && !isMoving;
+        DateTimeOffset? crossedHome = departureUnresolved ? null : person.CrossedHomeUtc;
+
         // The last known state is always reported, however old. Discarding it would throw away
         // real information; the UI shows the age alongside.
         return new PresenceView
@@ -322,10 +336,8 @@ public class PresenceService(
             IsMoving = isMoving,
             StationarySeconds = dwellSince is null ? null : (now - dwellSince.Value).TotalSeconds,
             StationarySinceUtc = dwellSince,
-            CrossedHomeUtc = person.CrossedHomeUtc,
-            SinceCrossedHomeSeconds = person.CrossedHomeUtc is null
-                ? null
-                : (now - person.CrossedHomeUtc.Value).TotalSeconds,
+            CrossedHomeUtc = crossedHome,
+            SinceCrossedHomeSeconds = crossedHome is null ? null : (now - crossedHome.Value).TotalSeconds,
             LastSeenUtc = person.LastSeenUtc ?? latest.ReceivedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,
