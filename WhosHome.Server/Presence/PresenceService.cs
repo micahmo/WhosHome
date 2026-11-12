@@ -87,6 +87,16 @@ public class PresenceService(
             person.StationaryLongitude = longitude;
         }
 
+        // Dated by the device, like the notification for the same crossing, so a phone that
+        // buffered its way out of signal dates the departure to when it happened rather than to when
+        // the backlog arrived. Capped at the present, because a phone clock running fast would
+        // otherwise date it into the future and the card would count up from below zero.
+        if (previousState != PresenceState.Unknown
+            && (previousState == PresenceState.Home) != (currentState == PresenceState.Home))
+        {
+            person.CrossedHomeUtc = reportedUtc < now ? reportedUtc : now;
+        }
+
         person.LastLatitude = latitude;
         person.LastLongitude = longitude;
         person.LastState = currentState;
@@ -312,6 +322,10 @@ public class PresenceService(
             IsMoving = isMoving,
             StationarySeconds = dwellSince is null ? null : (now - dwellSince.Value).TotalSeconds,
             StationarySinceUtc = dwellSince,
+            CrossedHomeUtc = person.CrossedHomeUtc,
+            SinceCrossedHomeSeconds = person.CrossedHomeUtc is null
+                ? null
+                : (now - person.CrossedHomeUtc.Value).TotalSeconds,
             LastSeenUtc = person.LastSeenUtc ?? latest.ReceivedUtc,
             AgeSeconds = age.TotalSeconds,
             IsStale = age > _options.StaleAfter,

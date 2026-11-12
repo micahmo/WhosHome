@@ -433,4 +433,100 @@ public class PresenceScenarios
         Assert.Null(view.TravelSeconds);
         Assert.False(view.TravelEstimateHeld);
     }
+
+    // ---- Time since crossing the home radius ----
+
+    [Fact]
+    public async Task Time_out_runs_from_leaving_home_through_stops_and_the_outer_ring()
+    {
+        // The question it answers is "when did they leave", which a stop on the way resets for dwell
+        // and which crossing from near home to away does not change.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(20, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromHours(1));
+        await harness.FixAsync(500, speedMetersPerSecond: 12);
+        DateTimeOffset left = harness.Clock.GetUtcNow();
+
+        harness.Advance(TimeSpan.FromMinutes(10));
+        await harness.FixAsync(harness.Options.NearbyRadiusMeters + 2_000, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(40));
+        await harness.FixAsync(harness.Options.NearbyRadiusMeters - 500, speedMetersPerSecond: 15);
+        harness.Advance(TimeSpan.FromMinutes(10));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.NotEqual(PresenceState.Home, view.State);
+        Assert.Equal(left, view.CrossedHomeUtc);
+        Assert.Equal(TimeSpan.FromHours(1).TotalSeconds, view.SinceCrossedHomeSeconds!.Value, precision: 0);
+    }
+
+    [Fact]
+    public async Task Time_home_survives_a_walking_pace_reading_in_the_house()
+    {
+        // Walking across an apartment building put "On the move" on a card that had been home all
+        // evening, and the duration vanished with it. The arrival has not changed, so neither should
+        // the time since it.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(3_000, speedMetersPerSecond: 15);
+        harness.Advance(TimeSpan.FromMinutes(5));
+        await harness.FixAsync(40, speedMetersPerSecond: 0);
+        DateTimeOffset arrived = harness.Clock.GetUtcNow();
+
+        harness.Advance(TimeSpan.FromHours(3));
+        await harness.FixAsync(60, speedMetersPerSecond: 4, accuracyMeters: 3);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.True(view.IsMoving);
+        Assert.Null(view.StationarySeconds);
+        Assert.Equal(PresenceState.Home, view.State);
+        Assert.Equal(arrived, view.CrossedHomeUtc);
+    }
+
+    [Fact]
+    public async Task A_buffered_departure_is_dated_when_it_happened()
+    {
+        // An iPhone recorded every fix of a departure but uploaded none of them for half an hour,
+        // then sent the lot in 25 seconds. "Out 30 min" is the truth; "out under a minute" is not.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(20, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(31));
+        await harness.FixAsync(400, speedMetersPerSecond: 10, recordedAgo: TimeSpan.FromMinutes(30));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(harness.Clock.GetUtcNow() - TimeSpan.FromMinutes(30), view.CrossedHomeUtc);
+    }
+
+    [Fact]
+    public async Task A_phone_clock_running_ahead_cannot_date_a_crossing_into_the_future()
+    {
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(20, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(10));
+        await harness.FixAsync(400, speedMetersPerSecond: 10, recordedAgo: TimeSpan.FromSeconds(-19));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(harness.Clock.GetUtcNow(), view.CrossedHomeUtc);
+        Assert.Equal(0, view.SinceCrossedHomeSeconds!.Value, precision: 0);
+    }
+
+    [Fact]
+    public async Task A_first_report_claims_no_crossing()
+    {
+        // It says which side of the line someone is on, but not when they got there.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(5_000, speedMetersPerSecond: 0);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Null(view.CrossedHomeUtc);
+        Assert.Null(view.SinceCrossedHomeSeconds);
+    }
 }

@@ -101,14 +101,20 @@ internal sealed class PresenceHarness : IAsyncDisposable
             options);
     }
 
-    /// <summary>A position report, given as a distance north of home in metres.</summary>
-    public Task FixAsync(double metresFromHome, double speedMetersPerSecond, double accuracyMeters = 5)
+    /// <summary>A position report, given as a distance north of home in metres. <paramref
+    /// name="recordedAgo"/> is how long before arrival the phone took it, as in a buffered upload;
+    /// negative for a phone whose clock runs ahead.</summary>
+    public Task FixAsync(
+        double metresFromHome,
+        double speedMetersPerSecond,
+        double accuracyMeters = 5,
+        TimeSpan recordedAgo = default)
     {
         return Service.RecordAsync(
             Person,
             HomeLatitude + (metresFromHome / MetresPerDegreeLatitude),
             HomeLongitude,
-            Clock.GetUtcNow(),
+            Clock.GetUtcNow() - recordedAgo,
             accuracyMeters,
             batteryPercent: 80,
             speedMetersPerSecond,

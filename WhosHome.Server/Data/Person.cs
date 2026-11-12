@@ -70,6 +70,16 @@ public class Person
     public DateTimeOffset? StationarySinceUtc { get; set; }
 
     /// <summary>
+    /// When they last crossed the home radius, in either direction: their arrival while they are
+    /// home, their departure while they are out. Unlike <see cref="StationarySinceUtc"/> it is
+    /// untouched by anything that happens on one side of the line, so a stop on the way, a walking
+    /// pace reading in the house, or a drive back and forth across the outer ring leaves it alone.
+    /// Null until the first crossing we see, since a first-ever report says where someone is but
+    /// not when they got there.
+    /// </summary>
+    public DateTimeOffset? CrossedHomeUtc { get; set; }
+
+    /// <summary>
     /// The spot <see cref="StationarySinceUtc"/> refers to. The clock resets when a fix lands
     /// further than the movement threshold from here, which is the only way to notice a journey made
     /// of steps that are individually too small to count: a car reporting every few seconds moves

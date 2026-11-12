@@ -24,6 +24,11 @@ export interface PresenceView {
   stationarySeconds: number | null
   /** When the current stop began. Sent absolute so clock skew cannot shift it. */
   stationarySinceUtc: string | null
+  /** When they last crossed the home radius: arrival while home, departure while out. Near home
+   * and away share one side of the line. Null until a crossing has been seen. */
+  crossedHomeUtc: string | null
+  /** Seconds since `crossedHomeUtc`. */
+  sinceCrossedHomeSeconds: number | null
   /** When the device last made contact, by position or heartbeat. Pairs with ageSeconds. */
   lastSeenUtc: string | null
   /** Seconds since the device last made contact, or null if it never has. */

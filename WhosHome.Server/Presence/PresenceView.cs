@@ -47,6 +47,15 @@ public sealed record PresenceView
     /// <summary>When the current stop began, for the same reason.</summary>
     public DateTimeOffset? StationarySinceUtc { get; init; }
 
+    /// <summary>When they last crossed the home radius: arrival while <see cref="State"/> is home,
+    /// departure while it is anything else. Near home and away share one side of the line, so this
+    /// is how long they have been out across both. Null until a crossing has been seen.</summary>
+    public DateTimeOffset? CrossedHomeUtc { get; init; }
+
+    /// <summary>Seconds since <see cref="CrossedHomeUtc"/>, computed here for the same reason as
+    /// <see cref="AgeSeconds"/>.</summary>
+    public double? SinceCrossedHomeSeconds { get; init; }
+
     /// <summary>Seconds since the device last made contact. A plain number rather than a TimeSpan,
     /// because .NET's TimeSpan JSON format is a .NET-ism the browser should not have to parse.</summary>
     public double? AgeSeconds { get; init; }

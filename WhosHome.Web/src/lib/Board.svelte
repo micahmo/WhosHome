@@ -44,6 +44,16 @@
     <!-- The arrival time alone once a phone goes quiet. "Stopped for four hours" asserts they are
          still there; "arrived at noon" only asserts when they got there, which we do know. -->
     {@const arrived = formatTimestamp(person.stationarySinceUtc)}
+    <!-- Time since they crossed the home radius: how long they have been home, or how long they
+         have been out. Separate from dwell, which only measures the current stop and so says
+         nothing about when someone moving around all afternoon actually left. -->
+    {@const crossed = person.crossedHomeUtc !== null}
+    {@const sinceCrossing =
+      formatDwell(person.sinceCrossedHomeSeconds) +
+      (deservesTimestamp(person.sinceCrossedHomeSeconds)
+        ? ` (since ${formatTimestamp(person.crossedHomeUtc)})`
+        : '')}
+    {@const crossedAt = formatTimestamp(person.crossedHomeUtc)}
     {@const age =
       formatAge(person.ageSeconds) +
       (deservesTimestamp(person.ageSeconds)
@@ -92,9 +102,17 @@
         {#if person.state !== 'Home' && shownDistance !== null}
           <span class="distance">{formatDistance(shownDistance)}</span>
         {/if}
-        <!-- Only at home do "been home this long" and "been in one spot this long" mean the same
-             thing, so only here can the duration hang off the state without misleading. -->
-        {#if settled && person.state === 'Home'}
+        <!-- The same rule as "Arrived" below once a phone goes quiet: when they crossed is still
+             known, but a running duration would assert they are still on that side of it. -->
+        {#if crossed}
+          {#if person.state === 'Home'}
+            <span class="distance">{person.isStale ? `since ${crossedAt}` : `for ${sinceCrossing}`}</span>
+          {:else}
+            <span class="distance">{person.isStale ? `left ${crossedAt}` : `out ${sinceCrossing}`}</span>
+          {/if}
+        {:else if settled && person.state === 'Home'}
+          <!-- No crossing seen yet, which is only someone who has not left home since this was
+               added. At home the current stop is the nearest thing to an arrival time. -->
           <span class="distance">{person.isStale ? `since ${arrived}` : `for ${dwell}`}</span>
         {/if}
       </p>

@@ -91,6 +91,9 @@ namespace WhosHome.Server.Data.Migrations
                     b.Property<long>("CreatedUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("CrossedHomeUtc")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("DeviceId")
                         .IsRequired()
                         .HasMaxLength(64)

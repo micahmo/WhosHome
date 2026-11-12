@@ -21,7 +21,8 @@ needs a second install and there is nothing to publish to a store.
 ## What each card tells you
 
 - **Home**, **Near home**, or **Away**, with how far away they are *by road*, not as the crow flies
-- **How long they have been there**, or **On the move** when they are travelling
+- **How long they have been home**, or **how long they have been out** since they left
+- **How long they have been stopped** wherever they are, or **On the move** when they are travelling
 - **How long ago their phone last checked in**, and its battery, with a bolt when it is charging
 - A bell to choose whether you are notified about that person
 

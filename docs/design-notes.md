@@ -233,6 +233,29 @@ contact too, and moves `LastSeenUtc`, while proving nothing about whether anyone
 answer with a cell-tower estimate at any point in a journey, and one did so mid-drive. Reusing the
 existing field would let a bad reading manufacture precisely the stop this section exists to prevent.
 
+### Time home and time out are not dwell
+
+Dwell answers "how long have they been at this spot", which is the wrong question for someone out
+running errands: every stop restarts it, and "On the move" carries no duration at all, so the card
+could not say when someone left. Home borrowed dwell for "Home for" only because nothing better
+existed, and it showed: a walking pace reading inside an apartment building put "On the move" on a
+card that had been home all evening, and the duration disappeared until the claim expired.
+
+So the person carries a second timestamp, `CrossedHomeUtc`, moved only when the home radius is
+crossed in either direction. At home it is the arrival, out it is the departure. Near home and away
+are the same side of that line and moving between them leaves it alone. Restarting at the outer ring
+looked tempting, but the ring is a straight-line radius that an ordinary drive near its edge crosses
+back and forth, and a quick errand that turns into a trip would lose its real start.
+
+It is dated by the reporting phone, like the notification for the same crossing. An iPhone once
+recorded a whole departure and uploaded none of it for half an hour, and only the device's own
+timestamps put the departure at the right time. It is capped at the present so a fast phone clock
+cannot date a crossing into the future. A first-ever report sets nothing, since it says which side
+of the line someone is on but not when they got there; until a crossing is seen, a person at home
+falls back to dwell as before. A quiet phone shows the time of the crossing rather than a running
+duration, the same rule "Arrived" follows: when they left is still known, that they are still out
+is not.
+
 ## Ignoring positions that cannot be trusted
 
 Every report carries the accuracy the device claims. Anything worse than `MaxAccuracyMeters` is
