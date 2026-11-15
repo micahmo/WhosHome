@@ -40,6 +40,7 @@ public class PresenceService(
         PresenceState previousState = person.LastState;
         PresenceState currentState = Classify(distanceMeters);
         DateTimeOffset now = timeProvider.GetUtcNow();
+        DateTimeOffset takenUtc = TakenAt(reportedUtc, now);
 
         // Movement is measured against the previous fix rather than against home, so someone
         // driving in a circle still reads as moving.
@@ -80,9 +81,13 @@ public class PresenceService(
         // somewhere: a phone at rest indoors reported 2 m/s and reset a clock that had legitimately
         // been running for forty minutes. Distance from the anchor is the durable question, and
         // pacing around the house cannot answer it wrongly.
+        //
+        // Dated by the device for the same reason as the crossing below: a phone that uploads a
+        // backlog would otherwise start the clock when the backlog arrived, and a stop that began
+        // during the outage would lose everything up to the upload.
         if (person.StationarySinceUtc is null || metersFromAnchor is null || hasRelocated)
         {
-            person.StationarySinceUtc = now;
+            person.StationarySinceUtc = takenUtc;
             person.StationaryLatitude = latitude;
             person.StationaryLongitude = longitude;
         }
@@ -94,7 +99,7 @@ public class PresenceService(
         if (previousState != PresenceState.Unknown
             && (previousState == PresenceState.Home) != (currentState == PresenceState.Home))
         {
-            person.CrossedHomeUtc = reportedUtc < now ? reportedUtc : now;
+            person.CrossedHomeUtc = takenUtc;
         }
 
         person.LastLatitude = latitude;
@@ -201,7 +206,10 @@ public class PresenceService(
     /// Bounded to the current anchor, not to a distance from home: distance from home is a radius,
     /// and two places the same distance out have different drives, so only "they have not left this
     /// spot" keeps the estimate honest. <see cref="Person.StationarySinceUtc"/> resets the instant
-    /// they relocate, so any report taken at or after it was taken here. Bounded again to
+    /// they relocate, so any report taken at or after it was taken here. "Taken" by the same clock
+    /// the anchor is dated with, the phone's capped at arrival: in a buffered upload a fix from the
+    /// previous spot can arrive after the anchor's phone time, so filtering on arrival alone would
+    /// carry that spot's drive over. Bounded again to
     /// <see cref="WhosHomeOptions.StaleAfter"/>, past which the card stops asserting anything current
     /// anyway. Skipped at home, where routing never runs, or a just-cleared away route would print a
     /// drive time on someone sitting in the house.
@@ -225,6 +233,7 @@ public class PresenceService(
             .AsNoTracking()
             .Where(report => report.PersonId == person.Id
                 && report.TravelSeconds != null
+                && report.ReportedUtc >= anchor
                 && report.ReceivedUtc >= anchor)
             .OrderByDescending(report => report.ReceivedUtc)
             .FirstOrDefaultAsync(cancellationToken);
@@ -287,9 +296,14 @@ public class PresenceService(
         bool checkedInSinceLastFix =
             person.LastCheckInUtc > latest.ReceivedUtc + _options.MovingClaimLifetime;
 
+        // The claim runs from when the fix was taken, not from when it arrived. The last fix of a
+        // buffered drive can land minutes after it was taken, and timing the claim from the upload
+        // would keep "On the move" up for that long after they stopped. The check-in test above
+        // stays on arrival times, since the race it guards against is two messages landing
+        // together, which only the server's clock can see.
         bool isMoving = movingWhenLastSeen
             && !checkedInSinceLastFix
-            && now - latest.ReceivedUtc <= _options.MovingClaimLifetime;
+            && now - TakenAt(latest.ReportedUtc, latest.ReceivedUtc) <= _options.MovingClaimLifetime;
 
         // A stop is not worth describing until it has held. The anchor resets all through a journey,
         // so mid-drive the clock has always only just started, and one slow fix is enough to present
@@ -382,6 +396,14 @@ public class PresenceService(
     /// Speed between two fixes. Null when there is nothing to measure against, or when the two
     /// arrived in the same instant, which would divide by zero and report an infinite speed.
     /// </summary>
+    /// <summary>When the phone took a fix, by its own clock, capped at when the fix arrived. The cap
+    /// is for a phone clock running fast, which would otherwise date events into the future and
+    /// have clocks count up from below zero.</summary>
+    private static DateTimeOffset TakenAt(DateTimeOffset reportedUtc, DateTimeOffset receivedUtc)
+    {
+        return reportedUtc < receivedUtc ? reportedUtc : receivedUtc;
+    }
+
     private static double? ComputeSpeed(double? movedMeters, DateTimeOffset? previousFixUtc, DateTimeOffset now)
     {
         if (movedMeters is null || previousFixUtc is null)

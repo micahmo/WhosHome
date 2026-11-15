@@ -102,7 +102,7 @@ does not register as travelling, which suits a board about whether someone is on
 ### Movement expires
 
 "On the move" describes this moment but is read off the latest report, which may be old, so it is only
-believed for `MovingClaimLifetime` after that report was received.
+believed for `MovingClaimLifetime` after the phone took it.
 
 Without that, the bias runs precisely the wrong way. A phone stops reporting *because* its owner
 stopped, so the last report of a journey is disproportionately likely to be one taken while still
@@ -144,7 +144,8 @@ anchor resets on the waking fix, so the clock starts then however long they have
 One phone reported at 12:44, went silent, and reported again at 18:14 from 383 m away; its card
 claimed a fresh stop for a car that had been parked five and a half hours. A debounce only delays
 that number by two minutes. Knowing when a stop began that we did not witness is a different
-problem.
+problem. A phone that kept taking fixes and held them is not that problem, since the fixes say when
+the stop began; see [A backlog is dated by the phone](#a-backlog-is-dated-by-the-phone).
 
 ### Running out of evidence is not the same as stopping
 
@@ -264,6 +265,27 @@ would say they stayed when the last word was that they were going, so the durati
 later fix or check-in settles it. That is how the card behaved when "Home for" was dwell, which
 declines to date a stop after a moving fix for the same reason. Only home is affected: out, the
 departure time stays true however the phone behaves afterwards.
+
+### A backlog is dated by the phone
+
+Traccar Client keeps every fix it cannot deliver and uploads the queue, oldest first, once the server
+answers again. So anything timed from a fix is timed from when the phone took it, by its own clock,
+capped at the moment it arrived so a fast phone clock cannot date anything into the future. Timing
+from arrival dates everything in a backlog to the upload. When the server was unreachable for twenty
+minutes, an iPhone held 139 fixes and sent them in 19 seconds; its stop clock started at the upload,
+four minutes after it last moved, and a stop made earlier in the outage would have lost all of it.
+
+Three things follow that rule: the stop clock's anchor, the home crossing, and the start of the
+movement claim. Timing the claim from arrival would keep "On the move" on a card for as long as the
+last fix of a drive sat in the queue.
+
+The held drive estimate moved with the anchor. It looks for routed fixes taken at or after the anchor,
+and in a backlog a fix from the previous spot can arrive after the anchor's phone time even though it
+was taken before it. Filtering on arrival alone would lend the new spot the old spot's drive.
+
+Check-ins stay on arrival time. The race they are tested against is a heartbeat and a position
+landing together, which only the server's clock can see, so a check-in has to arrive a full claim
+lifetime after the fix before it counts as the phone saying it has parked.
 
 ## Ignoring positions that cannot be trusted
 

@@ -574,4 +574,72 @@ public class PresenceScenarios
         Assert.Null(view.CrossedHomeUtc);
         Assert.Null(view.SinceCrossedHomeSeconds);
     }
+
+    // ---- Buffered uploads ----
+
+    [Fact]
+    public async Task A_stop_made_during_a_buffered_upload_is_dated_when_it_began()
+    {
+        // The server was unreachable for twenty minutes and an iPhone held 139 fixes, then sent them
+        // in 19 seconds. Its stop clock started at the upload, four minutes after its last movement.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(5_000, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(30));
+        await harness.FixAsync(7_000, speedMetersPerSecond: 15, recordedAgo: TimeSpan.FromMinutes(25));
+        harness.Advance(TimeSpan.FromSeconds(1));
+        await harness.FixAsync(8_000, speedMetersPerSecond: 0, recordedAgo: TimeSpan.FromMinutes(20));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(harness.Clock.GetUtcNow() - TimeSpan.FromMinutes(20), view.StationarySinceUtc);
+    }
+
+    [Fact]
+    public async Task A_phone_clock_running_ahead_cannot_date_a_stop_into_the_future()
+    {
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(5_000, speedMetersPerSecond: 0, recordedAgo: TimeSpan.FromSeconds(-19));
+        harness.Advance(harness.Options.DwellDebounce);
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Equal(harness.Clock.GetUtcNow() - harness.Options.DwellDebounce, view.StationarySinceUtc);
+    }
+
+    [Fact]
+    public async Task A_buffered_moving_fix_is_believed_from_when_it_was_taken()
+    {
+        // The last fix of a held drive arrives minutes after it was taken. Timing the claim from the
+        // upload would keep "On the move" on the card for those minutes after they had stopped.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(5_000, speedMetersPerSecond: 15, recordedAgo: TimeSpan.FromMinutes(4));
+        Assert.True((await harness.ViewAsync()).IsMoving);
+
+        harness.Advance(harness.Options.MovingClaimLifetime - TimeSpan.FromMinutes(3));
+
+        Assert.False((await harness.ViewAsync()).IsMoving);
+    }
+
+    [Fact]
+    public async Task A_buffered_fix_from_the_previous_spot_does_not_lend_it_a_drive_time()
+    {
+        // The stop anchor is dated by the phone, so a fix from the previous spot, uploaded in the
+        // same backlog, arrives after the anchor's time even though it was taken before it.
+        await using PresenceHarness harness = await PresenceHarness.StartAsync();
+
+        await harness.FixAsync(5_000, speedMetersPerSecond: 0);
+        harness.Advance(TimeSpan.FromMinutes(30));
+        await harness.FixAsync(5_000, speedMetersPerSecond: 0, recordedAgo: TimeSpan.FromMinutes(25));
+        await harness.RouteLastFixAsync(travelSeconds: 600, travelMeters: 6_000);
+        harness.Advance(TimeSpan.FromSeconds(1));
+        await harness.FixAsync(9_000, speedMetersPerSecond: 0, recordedAgo: TimeSpan.FromMinutes(10));
+
+        PresenceView view = await harness.ViewAsync();
+
+        Assert.Null(view.TravelSeconds);
+        Assert.False(view.TravelEstimateHeld);
+    }
 }
