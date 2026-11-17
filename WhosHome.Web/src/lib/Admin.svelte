@@ -11,6 +11,7 @@
     reorderPeople,
   } from './api'
   import type { PersonSummary } from './types'
+  import { formatTimestamp } from './format'
 
   let admin = $state(false)
   let starting = $state(true)
@@ -145,6 +146,15 @@
   }
 
   /** The setup page explains itself, so the message does not have to. */
+  function openedText(person: PersonSummary): string {
+    if (!person.lastOpenedUtc) {
+      return 'Has not opened the board yet'
+    }
+
+    const days = person.daysOpened === 1 ? '1 day' : `${person.daysOpened} days`
+    return `Opened the board on ${days}, last at ${formatTimestamp(person.lastOpenedUtc)}`
+  }
+
   function inviteText(url: string): string {
     return `Join Who's Home: ${url}`
   }
@@ -336,6 +346,7 @@
               <button class="danger" onclick={() => remove(person)} disabled={busy}>Remove</button>
             </span>
           </div>
+          <p class="muted small opened">{openedText(person)}</p>
 
           {#if person.setupUrl && shownLinks.includes(person.id)}
             {@const invite = inviteText(person.setupUrl)}
@@ -589,6 +600,11 @@
   .small {
     font-size: 0.8rem;
     margin: 0;
+  }
+
+  /* Lined up under the name: the grip's width plus the row's gap. */
+  .opened {
+    padding-left: calc(1.9rem + 0.75rem);
   }
 
   .error {

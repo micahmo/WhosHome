@@ -94,6 +94,9 @@ namespace WhosHome.Server.Data.Migrations
                     b.Property<long?>("CrossedHomeUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("DaysOpened")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("DeviceId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -110,6 +113,9 @@ namespace WhosHome.Server.Data.Migrations
 
                     b.Property<double?>("LastLongitude")
                         .HasColumnType("REAL");
+
+                    b.Property<long?>("LastOpenedUtc")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("LastSeenUtc")
                         .HasColumnType("INTEGER");

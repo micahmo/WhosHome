@@ -70,6 +70,9 @@ Links are good for 24 hours and then disappear on their own. Send a new one when
 the old one stops working. Minting a link never changes anyone's phone credential, so it is safe to
 re-send at any time and their history stays intact.
 
+The admin page also shows when each person last opened the board, and on how many days, so you can
+tell whether anyone is actually using it.
+
 Treat a live link like a password. It carries the sign-in code and the phone's credential, which is
 why the admin page keeps links hidden until you ask for one.
 

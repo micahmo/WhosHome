@@ -600,6 +600,8 @@ app.MapDelete("/api/admin/session", async (HttpContext httpContext) =>
 app.MapGet("/api/presence", async (
     HttpContext httpContext,
     PresenceService presence,
+    WhosHomeContext context,
+    TimeProvider timeProvider,
     IOptions<WhosHomeOptions> options,
     CancellationToken cancellationToken) =>
 {
@@ -607,6 +609,23 @@ app.MapGet("/api/presence", async (
     if (!member.Succeeded && !await AdminAccess.IsAdminAsync(httpContext, options.Value))
     {
         return Results.Unauthorized();
+    }
+
+    // Counted from members only, so an admin browser looking in is not anyone's usage. The page
+    // says when it is polling from behind other apps, and those polls are not someone looking at
+    // it. A client built before the header existed sends nothing and counts, which only matters
+    // until it updates.
+    if (member.Succeeded
+        && httpContext.Request.Headers["X-WhosHome-Visible"] != "0"
+        && int.TryParse(member.Principal!.FindFirstValue(ClaimTypes.NameIdentifier), out int viewerId))
+    {
+        Person? viewer = await context.People
+            .FirstOrDefaultAsync(candidate => candidate.Id == viewerId, cancellationToken);
+        if (viewer is not null
+            && BoardOpens.Record(viewer, timeProvider.GetUtcNow(), timeProvider.LocalTimeZone))
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     IReadOnlyList<PresenceView> views = await presence.GetPresenceAsync(cancellationToken);
@@ -712,6 +731,8 @@ app.MapGet("/api/people", async (
             person.Id,
             person.Name,
             person.DeviceId,
+            person.LastOpenedUtc,
+            person.DaysOpened,
             Code = linkIsLive ? person.LoginCode : null,
             SetupUrl = linkIsLive ? $"{origin}/setup/{person.SetupToken}" : null,
             ExpiresUtc = linkIsLive ? person.SetupTokenExpiresUtc : null,

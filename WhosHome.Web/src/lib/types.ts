@@ -57,6 +57,9 @@ export interface PersonSummary {
   id: number
   name: string
   deviceId: string
+  /** When they last had the board on screen, and on how many separate days since tracking began. */
+  lastOpenedUtc: string | null
+  daysOpened: number
   /** The live setup link, or nulls when there is none or it has expired. Returned with the
    * person so the admin page survives a refresh without minting a replacement. */
   code: string | null

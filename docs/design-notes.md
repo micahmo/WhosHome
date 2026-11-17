@@ -491,6 +491,23 @@ unreachable from the board on the one browser most likely to be both.
 Sessions are cookies with sliding expiry. The Data Protection keys that sign them live next to the
 database so a container update does not sign the household out.
 
+### Whether anyone opens the board
+
+Nothing else could say. There is no request log, the tunnel logs no paths, and a session is a cookie
+the server never records, so the only trace someone had used the board was turning on notifications,
+once. The admin page now shows when each person last had it open and on how many separate days.
+
+It is a timestamp and a counter on the person, not a log, for the same reason positions are not kept:
+how much the board gets used is worth knowing, and a history of exactly when is not. Days are counted
+in the server's time zone, so 11 PM at home is not tomorrow.
+
+Only the board's own read counts, and only from a member session, so an admin browser looking in is
+nobody's usage. The board polls every few seconds while open, so the time is written at most every
+five minutes; a new day always writes, so an open board spanning midnight still counts both days.
+The page also polls from behind other apps where the platform lets it, which is nobody looking, so it
+sends `X-WhosHome-Visible: 0` while hidden and those polls are skipped. A client from before the
+header sends nothing and counts, which lasts only until it updates.
+
 ## Setup links
 
 Minting a link sets two things: a six digit **code** and an unguessable **token**, both valid for
@@ -804,7 +821,7 @@ cache when checking for a new worker, so this is only about caches in between.
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
 | `GET`/`POST` `/ingest` | device id | OsmAnd protocol receiver |
-| `GET` `/api/presence` | member or admin | The board |
+| `GET` `/api/presence` | member or admin | The board. A member's read also records that they opened it, unless `X-WhosHome-Visible: 0` |
 | `GET` `/api/presence/stream` | member or admin | The same board, pushed as it changes |
 | `POST` `/api/session` | sign-in code | Start a session |
 | `GET` `/api/session` | member | Who am I |

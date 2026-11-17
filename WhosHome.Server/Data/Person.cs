@@ -94,6 +94,15 @@ public class Person
     /// Needed to turn a distance between two fixes into a speed for devices that report none.</summary>
     public DateTimeOffset? LastFixUtc { get; set; }
 
+    /// <summary>When this person last had the board open, for the admin page. Recorded from their
+    /// own session only, at most every few minutes, and only while the page is on screen. See
+    /// <see cref="Presence.BoardOpens"/>.</summary>
+    public DateTimeOffset? LastOpenedUtc { get; set; }
+
+    /// <summary>How many separate days, in the server's time zone, this person has had the board
+    /// open since tracking began. A count rather than a log, so nothing accumulates.</summary>
+    public int DaysOpened { get; set; }
+
     public List<PositionReport> Reports { get; set; } = [];
 
     public List<DeviceSubscription> Subscriptions { get; set; } = [];

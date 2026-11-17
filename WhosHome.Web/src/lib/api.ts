@@ -112,7 +112,11 @@ export function reorderPeople(ids: number[]): Promise<void> {
 // ---- The board, and the setup page ----
 
 export function getPresence(): Promise<PresenceView[]> {
-  return request<PresenceView[]>('/api/presence')
+  // Says whether the page is on screen, so the server does not count a board polling from behind
+  // other apps as someone having it open.
+  return request<PresenceView[]>('/api/presence', {
+    headers: { 'X-WhosHome-Visible': document.visibilityState === 'hidden' ? '0' : '1' },
+  })
 }
 
 export function getSetup(token: string): Promise<SetupInfo> {
